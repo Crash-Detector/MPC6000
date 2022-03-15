@@ -206,7 +206,7 @@ int main(void)
   while (1)
   {
     // Read from x-axis:
-    const float x_axis_raw = get_axis_val( );
+    const float x_axis_raw = get_axis_val( MPU_SAD, ACC_X_OUT );
     printf( "%f\r\n", x_axis_raw );
     HAL_Delay(500);
     /* USER CODE END WHILE */
