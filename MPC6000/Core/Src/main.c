@@ -36,27 +36,36 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
+
+#define get_axis_val(...) get_axis_val_base_wrapper( (f_args)(__VA_ARGS__) ); 
+
 #define MPU_SAD_R 0b11010001 // The last bit corresponds to R
 #define MPU_SAD_W 0b11010000
 
 #define MPU_SAD 0b1101000
 
-#define GYRO_CONFIG			0x1b
-#define ACC_CONFIG			0x1c
+#define GYRO_CONFIG         0x1b
+#define ACC_CONFIG          0x1c
 
 /* measurements*/
-#define ACC_X_OUT			0x3b
+#define ACC_X_OUT           0x3b
 
 
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c3;
+I2C_HandleTypeDef* hi2c_handler = &hi2c3;
 
 UART_HandleTypeDef hlpuart1;
 
 /* USER CODE BEGIN PV */
 
+typedef struct 
+    {
+    uint8_t sub_addr;
+    uint8_t axis_addr;
+    } f_args;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -64,18 +73,93 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C3_Init(void);
 static void MX_LPUART1_UART_Init(void);
+void  MPC6000_config( void );
+
+float get_axis_val_base_wrapper( const f_args in );
+float get_axis_val_base( const uint8_t sub_addr, const uint32_t bytes_to_read );
+void read_I2C_val( const uint8_t sub_addr, uint8 * const buff );
+
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void  MPC6000_config( void )
+    {
+    uint8_t buf[10] = {0};
 
-float get_axis_val( const uint8_t sub_addr, const uint8_t axis_sub_addr );
-	const uint8_t addr = sub_addr << 1;
+    // gyro config
+    buf[0] = GYRO_CONFIG;
+    buf[1] = 0b00011000;
+
+    // For HAL_I2C_Master_transmit...
+    // First arg: pointer to I2C1 instance initialized by MX_I2CX_Init
+    // Sec   arg: I2C address + r/w bit
+    // Third arg: pointer to transmit buffer.
+    // 4th  arg: size of buffer determining number of data writes (in bytes).
+    // 5th  arg:  Max time out delay set (in  milliseconds)
+
+    ret =  HAL_I2C_Master_Transmit(hi2c_handler, MPU_SAD_W, &buf[0], 2, 1000);
+    if ( ret != HAL_OK )
+        {
+        printf( "Error Tx\r\rn" );
+        } // end if
+
+    // Acc config
+    buf[0] = ACC_CONFIG;
+    buf[1] = 0b0011000;
+    ret =  HAL_I2C_Master_Transmit(hi2c_handler, MPU_SAD_W, &buf[0], 2, 1000);
+
+    if ( ret != HAL_OK )
+        {
+        printf( "Error Tx\r\rn" );
+        } // end if
+    } // end MPC6000_config( )
+
+float get_axis_val_base_wrapper( const f_args_t in )
+    {
+    const uint8_t sub_addr = in.sub_addr ? in.sub_addr : MPU_SAD;
+    const uint8_t axis_sub_addr = in.axis_addr ? in.axis_addr : ACC_X_OUT;
+
+    return get_axis_val_base( sub_addr, axis_sub_addr );
+    } // end get_axis_val_base_wrapper( )
 
 
+float get_axis_val_base( const uint8_t sub_addr, const uint8_t axis_sub_addr )
+    {
+    uint8_t buf[10] = { 0 };
+    HAL_StatusTypeDef ret;
+    buf[0] = sub_addr << 1;
+    buf[1] = axis_sub_addr; // This will be 0x3b (for x-axis)
 
+    read_I2C_val( sub_addr, axis_sub_addr, buff, 4 );
+    
+    } // end get_axis_val_base( )
+
+void read_I2C_val( const uint8_t sub_addr, const uint8_t reg_addr, int8 *const buff, const uint32_t buff_size )
+    {
+    const uint8_t sub_addr_w = sub_addr << 1; // Add in 1 (to indicate reading). 
+    const uint8_t sub_addr_r = sub_addr << 1 | 1; // Add in 1 (to indicate reading). 
+    const uint8_t reg_addr_c = reg_addr; // Add in 1 (to indicate reading). 
+    HAL_StatusTypeDef ret;   
+
+    // First tell slave the subaddress (to read from) -> (write to it)
+    ret = HAL_I2C_Master_Transmit( hi2c_handler, sub_addr_r, &reg_addr_c, 1, 1000 );
+    if ( ret != HAL_OK )
+        {
+        printf( "Error Tx\r\rn" );
+        } // end if
+
+    // Now read buff_size bytes from it.
+    ret = HAL_I2C_Master_transmi( hi2c_handler, sub_addr_r, buff, buff_size, 1000 );
+    if ( ret != HAL_OK )
+        {
+        printf( "Error Tx\r\rn" );
+        } // end if
+
+    return;
+    } // end read_I2C_val( )
 /* USER CODE END 0 */
 
 /**
@@ -109,26 +193,18 @@ int main(void)
   MX_I2C3_Init();
   MX_LPUART1_UART_Init();
   /* USER CODE BEGIN 2 */
+  MPC6000_config( );
   uint8_t buf[10] = {0};
   HAL_StatusTypeDef ret;
-  // gyro config
-  buf[0] = GYRO_CONFIG;
-  buf[1] = 0b00011000;
-  ret =  HAL_I2C_Master_Transmit(&hi2c3, MPU_SAD_W, &buf[0], 2, 1000);
-
-  // Acc config
-  buf[0] = ACC_CONFIG;
-  buf[1] = 0b0011000;
-  ret =  HAL_I2C_Master_Transmit(&hi2c3, MPU_SAD_W, &buf[0], 2, 1000);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	// Read from x-axis:
+    // Read from x-axis:
 
-	HAL_Delay(500);
+    HAL_Delay(500);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
