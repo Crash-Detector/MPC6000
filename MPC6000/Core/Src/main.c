@@ -36,8 +36,7 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
-#define get_axis_val(...) get_axis_val_base_wrapper( (f_args)(__VA_ARGS__) ); 
+#define get_axis_val(...) get_axis_val_base_wrapper( (f_args){__VA_ARGS__} );
 
 #define MPU_SAD_R 0b11010001 // The last bit corresponds to R
 #define MPU_SAD_W 0b11010000
@@ -76,8 +75,8 @@ static void MX_LPUART1_UART_Init(void);
 void  MPC6000_config( void );
 
 float get_axis_val_base_wrapper( const f_args in );
-float get_axis_val_base( const uint8_t sub_addr, const uint32_t bytes_to_read );
-void read_I2C_val( const uint8_t sub_addr, uint8 * const buff );
+float get_axis_val_base( const uint8_t sub_addr, const uint8_t bytes_to_read );
+void read_I2C_val( const uint8_t sub_addr, const uint8_t reg_addr, int8_t *const buff, const uint32_t buff_size );
 
 /* USER CODE BEGIN PFP */
 
@@ -87,6 +86,7 @@ void read_I2C_val( const uint8_t sub_addr, uint8 * const buff );
 /* USER CODE BEGIN 0 */
 void  MPC6000_config( void )
     {
+	HAL_StatusTypeDef ret;
     uint8_t buf[10] = {0};
 
     // gyro config
@@ -117,7 +117,7 @@ void  MPC6000_config( void )
         } // end if
     } // end MPC6000_config( )
 
-float get_axis_val_base_wrapper( const f_args_t in )
+float get_axis_val_base_wrapper( const f_args in )
     {
     const uint8_t sub_addr = in.sub_addr ? in.sub_addr : MPU_SAD;
     const uint8_t axis_sub_addr = in.axis_addr ? in.axis_addr : ACC_X_OUT;
@@ -129,15 +129,18 @@ float get_axis_val_base_wrapper( const f_args_t in )
 float get_axis_val_base( const uint8_t sub_addr, const uint8_t axis_sub_addr )
     {
     uint8_t buf[10] = { 0 };
-    HAL_StatusTypeDef ret;
     buf[0] = sub_addr << 1;
     buf[1] = axis_sub_addr; // This will be 0x3b (for x-axis)
 
-    read_I2C_val( sub_addr, axis_sub_addr, buff, 4 );
-    
+    read_I2C_val( sub_addr, axis_sub_addr, buf, 2 );
+
+    // The MSB is in the first byte, LSB second.
+    uint16_t axis_val = buf[ 0 ] | buf[ 1 ]; 
+
+    return (float)axis_val;
     } // end get_axis_val_base( )
 
-void read_I2C_val( const uint8_t sub_addr, const uint8_t reg_addr, int8 *const buff, const uint32_t buff_size )
+void read_I2C_val( const uint8_t sub_addr, const uint8_t reg_addr, int8_t *const buff, const uint32_t buff_size )
     {
     const uint8_t sub_addr_w = sub_addr << 1; // Add in 1 (to indicate reading). 
     const uint8_t sub_addr_r = sub_addr << 1 | 1; // Add in 1 (to indicate reading). 
@@ -145,14 +148,14 @@ void read_I2C_val( const uint8_t sub_addr, const uint8_t reg_addr, int8 *const b
     HAL_StatusTypeDef ret;   
 
     // First tell slave the subaddress (to read from) -> (write to it)
-    ret = HAL_I2C_Master_Transmit( hi2c_handler, sub_addr_r, &reg_addr_c, 1, 1000 );
+    ret = HAL_I2C_Master_Transmit( hi2c_handler, sub_addr_w, &reg_addr_c, 1, 1000 );
     if ( ret != HAL_OK )
         {
         printf( "Error Tx\r\rn" );
         } // end if
 
     // Now read buff_size bytes from it.
-    ret = HAL_I2C_Master_transmi( hi2c_handler, sub_addr_r, buff, buff_size, 1000 );
+    ret = HAL_I2C_Master_Transmit( hi2c_handler, sub_addr_r, buff, buff_size, 1000 );
     if ( ret != HAL_OK )
         {
         printf( "Error Tx\r\rn" );
@@ -203,7 +206,8 @@ int main(void)
   while (1)
   {
     // Read from x-axis:
-
+    const float x_axis_raw = get_axis_val( );
+    printf( "%f\r\n", x_axis_raw );
     HAL_Delay(500);
     /* USER CODE END WHILE */
 
