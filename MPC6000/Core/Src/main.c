@@ -32,21 +32,53 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
+#define get_axis_val(...) get_axis_val_base_wrapper( (f_args){__VA_ARGS__} );
+
+#define MPU_SAD_R 0b11010001 // The last bit corresponds to R
+#define MPU_SAD_W 0b11010000
+
+#define MPU_SAD 0b1101000
+
+#define GYRO_CONFIG         0x1b
+#define ACC_CONFIG          0x1c
+
+/* measurements*/
+#define ACC_X_OUT           0x3b
+
+#define MPU_CONFIG_REG			0x1a
+#define MPU_GYRO_CONFIG			0x1b
+#define MPU_ACC_CONFIG			0x1c
+#define MPU_PWR_MGMT_1			0x6b
+#define MPU_WHO_AM_I			  0x75
+#define MPU_ID              0x68 // 104
+
+/* measurements*/
+#define MPU_ACC_X_OUT			  0x3b
+#define MPU_GYRO_X_OUT			0x43
 
 
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c3;
+I2C_HandleTypeDef* hi2c_handler = &hi2c3;
 
 UART_HandleTypeDef hlpuart1;
 
 /* USER CODE BEGIN PV */
 
+uint8_t MPUbuf[10] = {0};
+
+typedef struct 
+    {
+    uint8_t sub_addr;
+    uint8_t axis_addr;
+    } f_args;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -54,92 +86,170 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C3_Init(void);
 static void MX_LPUART1_UART_Init(void);
+
 /* USER CODE BEGIN PFP */
+void  MPC6000_config( void );
+
+float get_axis_val_base_wrapper( const f_args in );
+float get_axis_val_base( const uint8_t sub_addr, const uint8_t bytes_to_read );
+void read_I2C_val( const uint8_t sub_addr, const uint8_t reg_addr, int8_t *const buff, const uint32_t buff_size );
+void readMPU( uint8_t * const val, const uint8_t reg_addr, const size_t len );
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void  MPC6000_config( void )
+    {
+    HAL_StatusTypeDef ret;
+    uint8_t buf[10] = {0};
 
-/* MPU is connected to I2C3.
- * Here is the code that hanles I2C reads and writes to MPU
- * */
+    // gyro config
+    buf[0] = GYRO_CONFIG;
+    buf[1] = 0b00011000;
 
-#define MPU_SAD_R 0b11010001 // The last bit corresponds to R
-#define MPU_SAD_W 0b11010000
+    // For HAL_I2C_Master_transmit...
+    // First arg: pointer to I2C1 instance initialized by MX_I2CX_Init
+    // Sec   arg: I2C address + r/w bit
+    // Third arg: pointer to transmit buffer.
+    // 4th  arg: size of buffer determining number of data writes (in bytes).
+    // 5th  arg:  Max time out delay set (in  milliseconds)
 
-#define MPU_SAD 0b1101000
-uint8_t MPUbuf[10] = {0};
-void readMPU(uint8_t* val, uint8_t reg_addr, size_t len){
-	  HAL_StatusTypeDef ret;
-	  MPUbuf[0] = reg_addr;
-	  ret = HAL_I2C_Master_Transmit(&hi2c3, MPU_SAD_W, &MPUbuf[0], 1, 1000);
-	  if (ret != HAL_OK) {
-		  printf("Error reading Data from MPU reg: %d \n\r", reg_addr);
-		  return;
-	  }
-	  ret = HAL_I2C_Master_Receive(&hi2c3, MPU_SAD_R, &MPUbuf[0], len, 1000);
-	  if (ret != HAL_OK) printf("Error reading Data from MPU reg: %d size: %d\n\r", reg_addr, len);
-	  for(size_t i=0; i<len; i++)
-		  val[i] = MPUbuf[i];
-}
+    ret =  HAL_I2C_Master_Transmit(hi2c_handler, MPU_SAD_W, &buf[0], 2, 1000);
+    if ( ret != HAL_OK )
+        {
+        printf( "Error Tx\r\rn" );
+        } // end if
 
-void writeMPU(uint8_t val, uint8_t reg_addr){
-	HAL_StatusTypeDef ret;
-	MPUbuf[0] = reg_addr;
-	MPUbuf[1] = val;
-	ret = HAL_I2C_Master_Transmit(&hi2c3, MPU_SAD_W, &MPUbuf[0], 2, 1000);
-	if (ret != HAL_OK) printf("Error writing to MPU reg: %d = %d\n\r", reg_addr, val);
-}
+    // Acc config
+    buf[0] = ACC_CONFIG;
+    buf[1] = 0b0011000;
+    ret =  HAL_I2C_Master_Transmit(hi2c_handler, MPU_SAD_W, &buf[0], 2, 1000);
 
-#define MPU_CONFIG_REG			0x1a
-#define MPU_GYRO_CONFIG			0x1b
-#define MPU_ACC_CONFIG			0x1c
-#define MPU_PWR_MGMT_1			0x6b
-#define MPU_WHO_AM_I			0x75
+    if ( ret != HAL_OK )
+        {
+        printf( "Error Tx\r\rn" );
+        } // end if
+    } // end MPC6000_config( )
 
-/* measurements*/
-#define MPU_ACC_X_OUT			0x3b
-#define MPU_GYRO_X_OUT			0x43
+float get_axis_val_base_wrapper( const f_args in )
+    {
+    const uint8_t sub_addr = in.sub_addr ? in.sub_addr : MPU_SAD;
+    const uint8_t axis_sub_addr = in.axis_addr ? in.axis_addr : ACC_X_OUT;
 
-void SetupMPU(){
-	  uint8_t mpu_id;
-	  readMPU(&mpu_id, MPU_WHO_AM_I, 1);
-	  printf("Setting up MPU Device on I2C3...\n\r");
-	  if (mpu_id != 104) {
-		  printf("[ERROR] MPU Device Setup Failed!!!\n\r");
-		  exit(1);
-	  }
-	  // reset and wait up from sleep
-	  uint8_t mpu_pwr_1= 0b10000000;
-	  writeMPU(mpu_pwr_1, MPU_PWR_MGMT_1);
-	  HAL_Delay(100);
-	  mpu_pwr_1 = 0;
-	  writeMPU(mpu_pwr_1, MPU_PWR_MGMT_1);
-	  // config reg
-	  uint8_t mpu_config_reg;
-	  mpu_config_reg = 0b001 << 3;
-	  writeMPU(mpu_config_reg, MPU_CONFIG_REG);
-	  // gyro config
+    return get_axis_val_base( sub_addr, axis_sub_addr );
+    } // end get_axis_val_base_wrapper( )
+
+
+float get_axis_val_base( const uint8_t sub_addr, const uint8_t axis_sub_addr )
+    {
+    uint8_t buf[10] = { 0 };
+    buf[0] = sub_addr << 1;
+    buf[1] = axis_sub_addr; // This will be 0x3b (for x-axis)
+
+    read_I2C_val( sub_addr, axis_sub_addr, buf, 2 );
+
+    // The MSB is in the first byte, LSB second.
+    uint16_t axis_val = buf[ 0 ] | buf[ 1 ]; 
+
+    return (float)axis_val;
+    } // end get_axis_val_base( )
+
+void read_I2C_val( const uint8_t sub_addr, const uint8_t reg_addr, int8_t *const buff, const uint32_t buff_size )
+    {
+    const uint8_t sub_addr_w = sub_addr << 1; // Add in 1 (to indicate reading). 
+    const uint8_t sub_addr_r = sub_addr << 1 | 1; // Add in 1 (to indicate reading). 
+    const uint8_t reg_addr_c = reg_addr; // Add in 1 (to indicate reading). 
+    HAL_StatusTypeDef ret;   
+
+    // First tell slave the subaddress (to read from) -> (write to it)
+    ret = HAL_I2C_Master_Transmit( hi2c_handler, sub_addr_w, &reg_addr_c, 1, 1000 );
+    if ( ret != HAL_OK )
+        {
+        printf( "Error Tx\r\rn" );
+        } // end if
+
+    // Now read buff_size bytes from it.
+    ret = HAL_I2C_Master_Receive( hi2c_handler, sub_addr_r, buff, buff_size, 1000 );
+    if ( ret != HAL_OK )
+        {
+        printf( "Error Tx\r\rn" );
+        } // end if
+
+    return;
+    } // end read_I2C_val( )
+
+
+void readMPU( uint8_t * const val_buff, const uint8_t reg_addr, const size_t len )
+    {
+    HAL_StatusTypeDef ret;
+    MPUBuf[ 0 ] = reg_addr;
+    ret = HAL_I2C_Master_Transmit( hi2c_handler, MPU_SAD_W, &MPUbuf[0], 1, 1000 );
+    if ( ret != HAL_OK )
+        {
+        fprintf( stderr, "Error reading Data from MPU reg: %d \n\r", reg_addr );
+        return;
+        } // end if
+    ret = HAL_I2C_Master_Receive( hi2c_handler, MPU_SAD_R, &MPUbuf[ 0 ], len, 1000 );
+    if ( ret != HAL_OK )
+        {
+        fprintf( stderr, "Error reading Data from MPU reg: %d size: %d\n\r", reg_addr, len);
+        } // end if
+
+    for( int n = 0; n < len; ++n )
+        val_buff[ i ] = MPUbuf[ i ];
+    } // end readMPU( )
+
+void writeMPU( const uint8_t val, const uint8_t reg_addr )
+    {
+    HAL_StatusTypeDef ret;
+    MPUbuf[0] = reg_addr;
+    MPUbuf[1] = val;
+    ret = HAL_I2C_Master_Transmit(&hi2c3, MPU_SAD_W, &MPUbuf[0], 2, 1000);
+    if (ret != HAL_OK) fprintf( stderr, "Error writing to MPU reg: %d = %d\n\r", reg_addr, val);
+    } // end writeMPU( )
+
+void SetupMPU( )
+    {
+    const uint8_t mpu_id;
+    readMPU( &mpu_id, MPU_WHO_AM_I, 1 );
+    printf( "Setting up MPU Device on I2C3...\n\r" );
+    if ( mpu_id != MPU_ID )
+        {
+        fprintf( stderr, "[ERROR] MPU Device Setup Failed!!!\n\r" );
+        exit( 1 );
+        } // end if
+    
+    // reset and wait up from sleep
+    uint8_t mpu_pwr_1 = 0b10000000;
+    writeMPU( mpu_pwr_1, MPU_PWR_MGMT_1 );
+    HAL_Delay( 100 );
+    mpu_pwr_1 = 0;
+    writeMPU(mpu_pwr_1, MPU_PWR_MGMT_1);
+
+    // config reg
+    const uint8_t mpu_config_reg = 0b001 << 3;
+    writeMPU( mpu_config_reg, MPU_CONFIG_REG );
+    // gyro config
 	  uint8_t mpu_gyro_config = 0b11 << 3;
-	  writeMPU(mpu_gyro_config, MPU_GYRO_CONFIG);
-	  readMPU(&mpu_gyro_config, MPU_GYRO_CONFIG, 1);
+	  writeMPU( mpu_gyro_config, MPU_GYRO_CONFIG );
+	  readMPU( &mpu_gyro_config, MPU_GYRO_CONFIG, sizeof( uint8_t ) );
 	  if (mpu_gyro_config != 0b11 << 3) {
-		  printf("[ERROR] MPU GyroMeter Setup Failed!!!");
+		  fprintf( stderr, "[ERROR] MPU GyroMeter Setup Failed!!!\r\n" );
 		  exit(1);
 	  }
 
 	  // Acc config
 	  uint8_t mpu_acc_config;
 	  mpu_acc_config = 0b11 << 3;
-	  writeMPU(mpu_acc_config, MPU_ACC_CONFIG);
-	  readMPU(&mpu_acc_config, MPU_ACC_CONFIG, 1);
+	  writeMPU( mpu_acc_config, MPU_ACC_CONFIG );
+	  readMPU( &mpu_acc_config, MPU_ACC_CONFIG, sizeof( uint8_t ) );
 	  if (mpu_acc_config != 0b11 << 3) {
-		  printf("[ERROR] MPU Acc Setup Failed!!!\n\r");
+		  printf("[ERROR] MPU Acc Setup Failed!!!\r\n");
 		  exit(1);
 	  }
-	  printf("...MPU Setup Success\n\r");
-}
+	  printf("...MPU Setup Success\r\n");
+    } // end SetupMPU( )
 
 /* USER CODE END 0 */
 
@@ -176,14 +286,16 @@ int main(void)
   /* USER CODE BEGIN 2 */
   printf("\r\n");
   SetupMPU();
+  MPC6000_config( );
   /* USER CODE END 2 */
 
   /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
   while (1)
-  {
-	 /* USER CODE BEGIN WHILE */
-	// Read from x-axis:
-	  uint8_t raw_acc[6];
+    {
+    // Read from x-axis:
+    //const float x_axis_raw = get_axis_val( MPU_SAD, ACC_X_OUT );
+    uint8_t raw_acc[6];
 	  readMPU(raw_acc, MPU_ACC_X_OUT, 6);
 	  int16_t raw_x, raw_y, raw_z;
 	  raw_x = raw_acc[0] << 8 | raw_acc[1];
@@ -207,7 +319,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  }
+    } // end while
   /* USER CODE END 3 */
 }
 
