@@ -183,7 +183,7 @@ void read_I2C_val( const uint8_t sub_addr, const uint8_t reg_addr, int8_t *const
 void readMPU( uint8_t * const val_buff, const uint8_t reg_addr, const size_t len )
     {
     HAL_StatusTypeDef ret;
-    MPUBuf[ 0 ] = reg_addr;
+    MPUbuf[ 0 ] = reg_addr;
     ret = HAL_I2C_Master_Transmit( hi2c_handler, MPU_SAD_W, &MPUbuf[0], 1, 1000 );
     if ( ret != HAL_OK )
         {
@@ -197,7 +197,7 @@ void readMPU( uint8_t * const val_buff, const uint8_t reg_addr, const size_t len
         } // end if
 
     for( int n = 0; n < len; ++n )
-        val_buff[ i ] = MPUbuf[ i ];
+        val_buff[ n ] = MPUbuf[ n ];
     } // end readMPU( )
 
 void writeMPU( const uint8_t val, const uint8_t reg_addr )
@@ -213,7 +213,7 @@ void SetupMPU( )
     {
     const uint8_t mpu_id;
     readMPU( &mpu_id, MPU_WHO_AM_I, 1 );
-    printf( "Setting up MPU Device on I2C3...\n\r" );
+    printf( "Setting up MPU Device on I2C3...\r\n" );
     if ( mpu_id != MPU_ID )
         {
         fprintf( stderr, "[ERROR] MPU Device Setup Failed!!!\n\r" );
