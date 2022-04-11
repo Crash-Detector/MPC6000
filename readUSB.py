@@ -10,7 +10,7 @@ import matplotlib.animation as animation
 import math
 
 DATA_POINT=8
-TIME_SPAN=5*10
+TIME_SPAN=1*10
 
 # Create figure for plotting
 xs = list(range(DATA_POINT*TIME_SPAN))
