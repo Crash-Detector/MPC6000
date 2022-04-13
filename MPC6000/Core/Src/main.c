@@ -174,6 +174,11 @@ void SetupMPU(){
 	  printf("...MPU Setup Success\n");
 }
 
+void MPUSleep(){
+	uint8_t mpu_pwr_1 = 1 << 6;
+	  writeMPU(mpu_pwr_1, MPU_PWR_MGMT_1);
+}
+
 typedef struct MPU_measure{
 	float Accx;
 	float Accy;
@@ -248,26 +253,27 @@ void MPU_Interrupt(){
 
 
 void Beep_sos(){
+	TIM4->ARR = 2000;
 	for(int j=0; j<5; j++){
 	for (int i=0; i<3; i++){
 	TIM4->CCR2 = 1000;
-	HAL_Delay(30);
+	HAL_Delay(90);
 	TIM4->CCR2 = 0;
-	HAL_Delay(30);
+	HAL_Delay(90);
 	}
 	for (int i=0; i<3; i++){
 		TIM4->CCR2 = 1000;
-		HAL_Delay(60);
+		HAL_Delay(180);
 		TIM4->CCR2 = 0;
-		HAL_Delay(30);
+		HAL_Delay(90);
 		}
 	for (int i=0; i<3; i++){
 		TIM4->CCR2 = 1000;
-		HAL_Delay(30);
+		HAL_Delay(90);
 		TIM4->CCR2 = 0;
-		HAL_Delay(30);
+		HAL_Delay(90);
 	}
-	HAL_Delay(100);
+	HAL_Delay(300);
 	}
 
 }
@@ -276,15 +282,24 @@ void Beep_sendmsg_warning(){
 	for (int i=0; i<6; i++){
 		TIM4->ARR = 3000;
 		TIM4->CCR2 = 1500;
-		HAL_Delay(50);
+		HAL_Delay(150);
 		TIM4->ARR = 2000;
 		TIM4->CCR2 = 1000;
-		HAL_Delay(50);
+		HAL_Delay(150);
 	}
 	TIM4->CCR2 =0;
 
 }
 
+void Beep_reset(){
+	TIM4->ARR = 2000;
+	TIM4->CCR2 = 1000;
+	HAL_Delay(20);
+	TIM4->ARR = 4000;
+	TIM4->CCR2 = 2000;
+	HAL_Delay(20);
+	TIM4->CCR2 =0;
+}
 
 /* USER CODE END 0 */
 
@@ -328,9 +343,19 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  Beep_sos();
-  Beep_sendmsg_warning();
+  fall_detected = 0;
+  Beep_reset();
   while(1){
+  	  if (fall_detected){
+  		MPUSleep(); /* turn off MPU */
+  		Beep_sos(); /* 30 sec */
+  		Beep_sendmsg_warning(); /* 3 sec */
+  		  // read sensors
+  		  // send out message
+  		fall_detected = 0;
+  		SetupMPU(); /* reset MPU */
+  		Beep_reset();
+  	  }
 
   }
     /* USER CODE END WHILE */
