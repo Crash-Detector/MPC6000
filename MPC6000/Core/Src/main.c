@@ -38,9 +38,16 @@
 /* USER CODE BEGIN PM */
 #define MPU_SampleRate 80 /* in Hz */
 #define FALL_DETECT_SAMPLES 40 /*in samples .. = 0.5 * MPU_SampleRate */
-#define ACC_LFT_SQ	0.09 /* 0.03 g */
+
+
+//#define ACC_LFT_SQ	0.09 /* 0.3 g */
+//#define ACC_UFT_SQ 7.67 /* 2.77 g */
+//#define GYR_UFT_SQ 64719.36 /* in 254.4 deg/s */
+
+/* for demo only */
+#define ACC_LFT_SQ 1.44 /* for demo */
 #define ACC_UFT_SQ 7.67 /* 2.77 g */
-#define GYR_UFT_SQ 64719.36 /* in 254.4 deg/s */
+#define GYR_UFT_SQ 0 /* for demo */
 
 int fall_detected = 0;
 
