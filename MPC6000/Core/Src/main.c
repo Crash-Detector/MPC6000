@@ -23,6 +23,10 @@
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "HAL_FONA.h"
+
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -40,7 +44,7 @@
 #define FALL_DETECT_SAMPLES 40 /*in samples .. = 0.5 * MPU_SampleRate */
 
 
-//#define ACC_LFT_SQ	0.09 /* 0.3 g */
+//#define ACC_LFT_SQ    0.09 /* 0.3 g */
 //#define ACC_UFT_SQ 7.67 /* 2.77 g */
 //#define GYR_UFT_SQ 64719.36 /* in 254.4 deg/s */
 
@@ -61,6 +65,15 @@ UART_HandleTypeDef hlpuart1;
 TIM_HandleTypeDef htim4;
 
 /* USER CODE BEGIN PV */
+extern char const * const ok_reply_c;
+extern const int reply_buff_size_c;
+extern const int fona_def_timeout_ms_c;
+
+extern const HAL_GPIO_t rst_pin; // PF13
+extern const HAL_GPIO_t pwr_pin; // PE09
+
+char message_buffer[1024];
+char const * const init_mess ="Hello World!";
 
 /* USER CODE END PV */
 
@@ -87,138 +100,138 @@ static void MX_TIM4_Init(void);
 #define MPU_SAD 0b1101000
 uint8_t MPUbuf[10] = {0};
 void readMPU(uint8_t* val, uint8_t reg_addr, size_t len){
-	  HAL_StatusTypeDef ret;
-	  MPUbuf[0] = reg_addr;
-	  ret = HAL_I2C_Master_Transmit(&hi2c3, MPU_SAD_W, &MPUbuf[0], 1, 1000);
-	  if (ret != HAL_OK) {
-		  printf("Error reading Data from MPU reg: %d \n", reg_addr);
-		  return;
-	  }
-	  ret = HAL_I2C_Master_Receive(&hi2c3, MPU_SAD_R, &MPUbuf[0], len, 1000);
-	  if (ret != HAL_OK) printf("Error reading Data from MPU reg: %d size: %d\n", reg_addr, len);
-	  for(size_t i=0; i<len; i++)
-		  val[i] = MPUbuf[i];
+      HAL_StatusTypeDef ret;
+      MPUbuf[0] = reg_addr;
+      ret = HAL_I2C_Master_Transmit(&hi2c3, MPU_SAD_W, &MPUbuf[0], 1, 1000);
+      if (ret != HAL_OK) {
+          printf("Error reading Data from MPU reg: %d \n", reg_addr);
+          return;
+      }
+      ret = HAL_I2C_Master_Receive(&hi2c3, MPU_SAD_R, &MPUbuf[0], len, 1000);
+      if (ret != HAL_OK) printf("Error reading Data from MPU reg: %d size: %d\n", reg_addr, len);
+      for(size_t i=0; i<len; i++)
+          val[i] = MPUbuf[i];
 }
 
 void writeMPU(uint8_t val, uint8_t reg_addr){
-	HAL_StatusTypeDef ret;
-	MPUbuf[0] = reg_addr;
-	MPUbuf[1] = val;
-	ret = HAL_I2C_Master_Transmit(&hi2c3, MPU_SAD_W, &MPUbuf[0], 2, 1000);
-	if (ret != HAL_OK) printf("Error writing to MPU reg: %d = %d\n", reg_addr, val);
+    HAL_StatusTypeDef ret;
+    MPUbuf[0] = reg_addr;
+    MPUbuf[1] = val;
+    ret = HAL_I2C_Master_Transmit(&hi2c3, MPU_SAD_W, &MPUbuf[0], 2, 1000);
+    if (ret != HAL_OK) printf("Error writing to MPU reg: %d = %d\n", reg_addr, val);
 }
 
-#define MPU_SMPRT_DIV			0x19
-#define MPU_CONFIG_REG			0x1a
-#define MPU_GYRO_CONFIG			0x1b
-#define MPU_ACC_CONFIG			0x1c
-#define MPU_PWR_MGMT_1			0x6b
-#define MPU_WHO_AM_I			0x75
-#define MPU_INT_ENABLE			0x38
-#define MPU_INT_STATUS			0x3a
+#define MPU_SMPRT_DIV           0x19
+#define MPU_CONFIG_REG          0x1a
+#define MPU_GYRO_CONFIG         0x1b
+#define MPU_ACC_CONFIG          0x1c
+#define MPU_PWR_MGMT_1          0x6b
+#define MPU_WHO_AM_I            0x75
+#define MPU_INT_ENABLE          0x38
+#define MPU_INT_STATUS          0x3a
 
 /* measurements*/
-#define MPU_ACC_X_OUT			0x3b
-#define MPU_GYRO_X_OUT			0x43
+#define MPU_ACC_X_OUT           0x3b
+#define MPU_GYRO_X_OUT          0x43
 
-#define MPU_OUTPUT_RATE			8000 // default output rate in Hz
+#define MPU_OUTPUT_RATE         8000 // default output rate in Hz
 
 void SetupMPU(){
-	  uint8_t mpu_id;
-	  readMPU(&mpu_id, MPU_WHO_AM_I, 1);
-	  printf("Setting up MPU Device on I2C3...\n");
-	  if (mpu_id != 104) {
-		  printf("[ERROR] MPU Device Setup Failed!!!\n");
-		  exit(1);
-	  }
-	  // reset and wait up from sleep
-	  uint8_t mpu_pwr_1= 0b10000000;
-	  writeMPU(mpu_pwr_1, MPU_PWR_MGMT_1);
-	  HAL_Delay(100);
-	  mpu_pwr_1 = 0;
-	  writeMPU(mpu_pwr_1, MPU_PWR_MGMT_1);
+      uint8_t mpu_id;
+      readMPU(&mpu_id, MPU_WHO_AM_I, 1);
+      printf("Setting up MPU Device on I2C3...\n");
+      if (mpu_id != 104) {
+          printf("[ERROR] MPU Device Setup Failed!!!\n");
+          exit(1);
+      }
+      // reset and wait up from sleep
+      uint8_t mpu_pwr_1= 0b10000000;
+      writeMPU(mpu_pwr_1, MPU_PWR_MGMT_1);
+      HAL_Delay(100);
+      mpu_pwr_1 = 0;
+      writeMPU(mpu_pwr_1, MPU_PWR_MGMT_1);
 
-	  // config sampling rate
-	  uint8_t mpu_sample_div = MPU_OUTPUT_RATE / MPU_SampleRate;
-	  writeMPU(mpu_sample_div, MPU_SMPRT_DIV);
+      // config sampling rate
+      uint8_t mpu_sample_div = MPU_OUTPUT_RATE / MPU_SampleRate;
+      writeMPU(mpu_sample_div, MPU_SMPRT_DIV);
 
-	  // config reg
-	  uint8_t mpu_config_reg;
-	  mpu_config_reg = 0b001 << 3;
-	  writeMPU(mpu_config_reg, MPU_CONFIG_REG);
+      // config reg
+      uint8_t mpu_config_reg;
+      mpu_config_reg = 0b001 << 3;
+      writeMPU(mpu_config_reg, MPU_CONFIG_REG);
 
 
-	  // gyro config
-	  uint8_t mpu_gyro_config = 0b11 << 3;
-	  writeMPU(mpu_gyro_config, MPU_GYRO_CONFIG);
-	  readMPU(&mpu_gyro_config, MPU_GYRO_CONFIG, 1);
-	  if (mpu_gyro_config != 0b11 << 3) {
-		  printf("[ERROR] MPU GyroMeter Setup Failed!!!");
-		  exit(1);
-	  }
+      // gyro config
+      uint8_t mpu_gyro_config = 0b11 << 3;
+      writeMPU(mpu_gyro_config, MPU_GYRO_CONFIG);
+      readMPU(&mpu_gyro_config, MPU_GYRO_CONFIG, 1);
+      if (mpu_gyro_config != 0b11 << 3) {
+          printf("[ERROR] MPU GyroMeter Setup Failed!!!");
+          exit(1);
+      }
 
-	  // Acc config
-	  uint8_t mpu_acc_config;
-	  mpu_acc_config = 0b11 << 3;
-	  writeMPU(mpu_acc_config, MPU_ACC_CONFIG);
-	  readMPU(&mpu_acc_config, MPU_ACC_CONFIG, 1);
-	  if (mpu_acc_config != 0b11 << 3) {
-		  printf("[ERROR] MPU Acc Setup Failed!!!\n");
-		  exit(1);
-	  }
+      // Acc config
+      uint8_t mpu_acc_config;
+      mpu_acc_config = 0b11 << 3;
+      writeMPU(mpu_acc_config, MPU_ACC_CONFIG);
+      readMPU(&mpu_acc_config, MPU_ACC_CONFIG, 1);
+      if (mpu_acc_config != 0b11 << 3) {
+          printf("[ERROR] MPU Acc Setup Failed!!!\n");
+          exit(1);
+      }
 
-	  // Generate interrupt at each data ready
-	  // set DATA_RDY_EN = 1
-	  uint8_t mpu_int_enable;
-	  mpu_int_enable = 0b1;
-	  writeMPU(mpu_int_enable, MPU_INT_ENABLE);
-	  readMPU(&mpu_int_enable, MPU_INT_ENABLE, 1);
-	  if (mpu_int_enable != 1) {
-		  printf("[ERROR] MPU interrupt Setup Failed!!!\n");
-		  exit(1);
-	  }
+      // Generate interrupt at each data ready
+      // set DATA_RDY_EN = 1
+      uint8_t mpu_int_enable;
+      mpu_int_enable = 0b1;
+      writeMPU(mpu_int_enable, MPU_INT_ENABLE);
+      readMPU(&mpu_int_enable, MPU_INT_ENABLE, 1);
+      if (mpu_int_enable != 1) {
+          printf("[ERROR] MPU interrupt Setup Failed!!!\n");
+          exit(1);
+      }
 
-	  printf("...MPU Setup Success\n");
+      printf("...MPU Setup Success\n");
 }
 
 void MPUSleep(){
-	uint8_t mpu_pwr_1 = 1 << 6;
-	  writeMPU(mpu_pwr_1, MPU_PWR_MGMT_1);
+    uint8_t mpu_pwr_1 = 1 << 6;
+      writeMPU(mpu_pwr_1, MPU_PWR_MGMT_1);
 }
 
 typedef struct MPU_measure{
-	float Accx;
-	float Accy;
-	float Accz;
-	float Gyrx;
-	float Gyry;
-	float Gyrz;
+    float Accx;
+    float Accy;
+    float Accz;
+    float Gyrx;
+    float Gyry;
+    float Gyrz;
 }MPU_measure;
 
 MPU_measure getMPU(){
-	MPU_measure rt;
-	// Read from x-axis:
-	  uint8_t raw_acc[6];
-	  readMPU(raw_acc, MPU_ACC_X_OUT, 6);
-	  int16_t raw_x, raw_y, raw_z;
-	  raw_x = raw_acc[0] << 8 | raw_acc[1];
-	  raw_y = raw_acc[2] << 8 | raw_acc[3];
-	  raw_z = raw_acc[4] << 8 | raw_acc[5];
-	  rt.Accx = (float)(raw_x)/2048.0;
-	  rt.Accy = (float)(raw_y)/2048.0;
-	  rt.Accz = (float)(raw_z)/2048.0;
-//	  printf("Acc X: %f Gs Y: %f Gs Z: %f Gs \n", Accx, Accy, Accz);
-	  uint8_t raw_gyro[6];
-	  readMPU(raw_gyro, MPU_GYRO_X_OUT, 6);
-	  int16_t raw_x_g, raw_y_g, raw_z_g;
-	  raw_x_g = raw_gyro[0] << 8 | raw_gyro[1];
-	  raw_y_g = raw_gyro[2] << 8 | raw_gyro[3];
-	  raw_z_g = raw_gyro[4] << 8 | raw_gyro[5];
-	  rt.Gyrx = (float)(raw_x_g)/65.532;
-	  rt.Gyry = (float)(raw_y_g)/65.532;
-	  rt.Gyrz = (float)(raw_z_g)/65.532;
-//	  printf("Gyro X: %f deg/s Y: %f deg/s Z: %f deg/s\n", Gx, Gy, Gz);
-	  return rt;
+    MPU_measure rt;
+    // Read from x-axis:
+      uint8_t raw_acc[6];
+      readMPU(raw_acc, MPU_ACC_X_OUT, 6);
+      int16_t raw_x, raw_y, raw_z;
+      raw_x = raw_acc[0] << 8 | raw_acc[1];
+      raw_y = raw_acc[2] << 8 | raw_acc[3];
+      raw_z = raw_acc[4] << 8 | raw_acc[5];
+      rt.Accx = (float)(raw_x)/2048.0;
+      rt.Accy = (float)(raw_y)/2048.0;
+      rt.Accz = (float)(raw_z)/2048.0;
+//    printf("Acc X: %f Gs Y: %f Gs Z: %f Gs \n", Accx, Accy, Accz);
+      uint8_t raw_gyro[6];
+      readMPU(raw_gyro, MPU_GYRO_X_OUT, 6);
+      int16_t raw_x_g, raw_y_g, raw_z_g;
+      raw_x_g = raw_gyro[0] << 8 | raw_gyro[1];
+      raw_y_g = raw_gyro[2] << 8 | raw_gyro[3];
+      raw_z_g = raw_gyro[4] << 8 | raw_gyro[5];
+      rt.Gyrx = (float)(raw_x_g)/65.532;
+      rt.Gyry = (float)(raw_y_g)/65.532;
+      rt.Gyrz = (float)(raw_z_g)/65.532;
+//    printf("Gyro X: %f deg/s Y: %f deg/s Z: %f deg/s\n", Gx, Gy, Gz);
+      return rt;
 }
 
 unsigned int fall_window=0;
@@ -227,85 +240,85 @@ unsigned int fall_window=0;
 /* pushes MPU data to usb */
 
 void detect_fall(MPU_measure m){
-	float accsq;
-	accsq = m.Accx * m.Accx + m.Accy * m.Accy + m.Accz * m.Accz;
-	if (accsq <= ACC_LFT_SQ && !fall_window)
-		fall_window = FALL_DETECT_SAMPLES;
-	if (!fall_window) return;
-	fall_window--;
-	if (accsq < ACC_UFT_SQ) return;
-	float gyrsq;
-	gyrsq = m.Gyrx * m.Gyrx + m.Gyry * m.Gyry + m.Gyrz * m.Gyrz;
-	if (gyrsq < GYR_UFT_SQ) return;
-	fall_detected = 1;
+    float accsq;
+    accsq = m.Accx * m.Accx + m.Accy * m.Accy + m.Accz * m.Accz;
+    if (accsq <= ACC_LFT_SQ && !fall_window)
+        fall_window = FALL_DETECT_SAMPLES;
+    if (!fall_window) return;
+    fall_window--;
+    if (accsq < ACC_UFT_SQ) return;
+    float gyrsq;
+    gyrsq = m.Gyrx * m.Gyrx + m.Gyry * m.Gyry + m.Gyrz * m.Gyrz;
+    if (gyrsq < GYR_UFT_SQ) return;
+    fall_detected = 1;
 }
 void push_MPU_data(MPU_measure m){
-	printf("%f,%f,%f,%f,%f,%f,%d,%d\n", m.Accx, m.Accy, m.Accz, m.Gyrx, m.Gyry, m.Gyrz, fall_window, fall_detected);
+    printf("%f,%f,%f,%f,%f,%f,%d,%d\n", m.Accx, m.Accy, m.Accz, m.Gyrx, m.Gyry, m.Gyrz, fall_window, fall_detected);
 }
 
 void MPU_Interrupt(){
-	/* read MPU */
-	MPU_measure mpu_data = getMPU();
-	push_MPU_data(mpu_data);
-	detect_fall(mpu_data);
+    /* read MPU */
+    MPU_measure mpu_data = getMPU();
+    push_MPU_data(mpu_data);
+    detect_fall(mpu_data);
 
-	/* clear interrupt*/
-	uint8_t mpu_int_status;
-	readMPU(&mpu_int_status, MPU_INT_STATUS, 1);
-	if ((mpu_int_status & 0b1) != 1) {
-		printf("[ERROR] MPU interrupt Clear Failed!!!!\n");
-		exit(1);
-	}
+    /* clear interrupt*/
+    uint8_t mpu_int_status;
+    readMPU(&mpu_int_status, MPU_INT_STATUS, 1);
+    if ((mpu_int_status & 0b1) != 1) {
+        printf("[ERROR] MPU interrupt Clear Failed!!!!\n");
+        exit(1);
+    }
 }
 
 
 void Beep_sos(){
-	TIM4->ARR = 2000;
-	for(int j=0; j<5; j++){
-	for (int i=0; i<3; i++){
-	TIM4->CCR2 = 1000;
-	HAL_Delay(90);
-	TIM4->CCR2 = 0;
-	HAL_Delay(90);
-	}
-	for (int i=0; i<3; i++){
-		TIM4->CCR2 = 1000;
-		HAL_Delay(180);
-		TIM4->CCR2 = 0;
-		HAL_Delay(90);
-		}
-	for (int i=0; i<3; i++){
-		TIM4->CCR2 = 1000;
-		HAL_Delay(90);
-		TIM4->CCR2 = 0;
-		HAL_Delay(90);
-	}
-	HAL_Delay(300);
-	}
+    TIM4->ARR = 2000;
+    for(int j=0; j<5; j++){
+    for (int i=0; i<3; i++){
+    TIM4->CCR2 = 1000;
+    HAL_Delay(90);
+    TIM4->CCR2 = 0;
+    HAL_Delay(90);
+    }
+    for (int i=0; i<3; i++){
+        TIM4->CCR2 = 1000;
+        HAL_Delay(180);
+        TIM4->CCR2 = 0;
+        HAL_Delay(90);
+        }
+    for (int i=0; i<3; i++){
+        TIM4->CCR2 = 1000;
+        HAL_Delay(90);
+        TIM4->CCR2 = 0;
+        HAL_Delay(90);
+    }
+    HAL_Delay(300);
+    }
 
 }
 
 void Beep_sendmsg_warning(){
-	for (int i=0; i<6; i++){
-		TIM4->ARR = 3000;
-		TIM4->CCR2 = 1500;
-		HAL_Delay(150);
-		TIM4->ARR = 2000;
-		TIM4->CCR2 = 1000;
-		HAL_Delay(150);
-	}
-	TIM4->CCR2 =0;
+    for (int i=0; i<6; i++){
+        TIM4->ARR = 3000;
+        TIM4->CCR2 = 1500;
+        HAL_Delay(150);
+        TIM4->ARR = 2000;
+        TIM4->CCR2 = 1000;
+        HAL_Delay(150);
+    }
+    TIM4->CCR2 =0;
 
 }
 
 void Beep_reset(){
-	TIM4->ARR = 2000;
-	TIM4->CCR2 = 1000;
-	HAL_Delay(20);
-	TIM4->ARR = 4000;
-	TIM4->CCR2 = 2000;
-	HAL_Delay(20);
-	TIM4->CCR2 =0;
+    TIM4->ARR = 2000;
+    TIM4->CCR2 = 1000;
+    HAL_Delay(20);
+    TIM4->ARR = 4000;
+    TIM4->CCR2 = 2000;
+    HAL_Delay(20);
+    TIM4->CCR2 =0;
 }
 
 /* USER CODE END 0 */
@@ -317,7 +330,7 @@ void Beep_reset(){
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
+  Cellular_module_t cell;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -326,14 +339,14 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
+  cell.uart_ptr = &huart3;
   /* USER CODE END Init */
 
   /* Configure the system clock */
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+  
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -346,25 +359,48 @@ int main(void)
   SetupMPU();
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
   TIM4->CCR2 = 0;
+
+  if ( !begin( &cell ) )
+    {
+    printf( "Failed initialization\n\r" );
+    return 1;
+    }
+  else
+    {
+    printf( "Found SIM7000 using hardware serial\n\r" );
+    }
+
+  if ( !setNetworkSettings( &cell ) )
+    {
+    printf( "Network settings NOT set\n\r" );
+    return 1;
+    }
+  else
+    {
+    printf( "Network settings set\n\r" );
+    }
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   fall_detected = 0;
   Beep_reset();
-  while(1){
-  	  if (fall_detected){
-  		MPUSleep(); /* turn off MPU */
-  		Beep_sos(); /* 30 sec */
-  		Beep_sendmsg_warning(); /* 3 sec */
-  		  // read sensors
-  		  // send out message
-  		fall_detected = 0;
-  		SetupMPU(); /* reset MPU */
-  		Beep_reset();
-  	  }
-
-  }
+    while(1)
+        {
+        if (fall_detected)
+            {
+            MPUSleep(); /* turn off MPU */
+            Beep_sos(); /* 30 sec */
+            Beep_sendmsg_warning(); /* 3 sec */
+            // read sensors
+            // send out message
+            send_sms( &cell, init_mess );
+            fall_detected = 0;
+            SetupMPU(); /* reset MPU */
+            Beep_reset();
+            } // end if
+        } // end while
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
