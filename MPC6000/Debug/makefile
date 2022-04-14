@@ -60,8 +60,8 @@ all: main-build
 main-build: MPC6000.elf secondary-outputs
 
 # Tool invocations
-MPC6000.elf: $(OBJS) $(USER_OBJS) C:\MyPrograms\EECS373\MPC6000\STM32L4R5ZITXP_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "MPC6000.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\MyPrograms\EECS373\MPC6000\STM32L4R5ZITXP_FLASH.ld" --specs=nosys.specs -Wl,-Map="MPC6000.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -u _printf_float -Wl,--start-group -lc -lm -Wl,--end-group
+MPC6000.elf: $(OBJS) $(USER_OBJS) /Users/robinxiong/Documents/src/eecs/373/w22/proj/EECS373_Crash_Detector/MPC6000/MPC6000/STM32L4R5ZITXP_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "MPC6000.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"/Users/robinxiong/Documents/src/eecs/373/w22/proj/EECS373_Crash_Detector/MPC6000/MPC6000/STM32L4R5ZITXP_FLASH.ld" --specs=nosys.specs -Wl,-Map="MPC6000.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -u _printf_float -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
