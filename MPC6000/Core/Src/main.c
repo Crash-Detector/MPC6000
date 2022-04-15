@@ -491,6 +491,102 @@ int main(void)
 
   /*--------------end------------------*/
 
+
+
+  /*biometric sensor setup*/
+  /*--------------begin------------------*/
+	  HAL_StatusTypeDef ret;
+	  uint8_t buf[10];
+	  int HM_samples = 0x1;
+  	  bio_sensor_init( &sensor, &hi2c1, HM_ADDR, rst_pin_c, mfio_pin_c, def_sample_rate, DISABLE );
+	  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_0,  0); // Reset pin
+	  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_1,  1); // MFIO pin
+	  HAL_Delay(10);
+	  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_0,  1); // Reset is pulled
+	  HAL_Delay(50);
+	  HAL_Delay(1000);
+
+	  buf[0] = 0x02;
+	  buf[1] = 0x00;
+	  ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 2, 5000);
+	  HAL_Delay(6);
+	  ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 2, 5000);
+	  printf("error code: %x application mode: %x\n\r", buf[0],buf[1]);
+	  set_pin_mode( &sensor._mfio_pin, IN );
+
+	  /*set our mode to MODE 1*/
+	    buf[0] = 0x10;
+	    buf[1] = 0x00;
+	    buf[2] = 0x02;
+	    ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
+	    HAL_Delay(6);
+	    ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
+	    if(buf[0] != 0x00 || ret != HAL_OK ){
+	        printf("Error setting mode: code %x\n\r", buf[0]);
+	    }
+	    printf("mode set to raw and algo\n");
+
+	    /*Set FIFO threshold as almost full at 0x0F*/
+	    buf[0] = 0x10;
+	    buf[1] = 0x01;
+	    buf[2] = samples;
+	    ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
+	    HAL_Delay(6);
+	    ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
+	      if(buf[0] != 0x00 || ret != HAL_OK ){
+	        printf("Error setting FIFO threshold code: %x\n\r", buf[0]);
+	      }
+	    printf("fifo set\n");
+
+	    /*disable AGC*/
+	    buf[0] = 0x52;
+	      buf[1] = 0x00;
+	      buf[2] = 0x00;
+	      ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
+	      HAL_Delay(25);
+	      ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
+	        if(buf[0] != 0x00 || ret != HAL_OK ){
+	          printf("Error Enabling Algorithm code: %x\n\r", buf[0]);
+	        }
+	       printf("enable AGC \n");
+
+
+
+	    /*Disable the sensor*/
+	    buf[0] = 0x44;
+	    buf[1] = 0x03;
+	    buf[2] = 0x00;
+	    ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
+	    HAL_Delay(45);
+	    ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
+	      if(buf[0] != 0x00 || ret != HAL_OK ){
+	        printf("Error enabling sensor code: %x\n\r", buf[0]);
+	      }
+	      printf("sensor set\n");
+
+
+	    /*Disable the algorithm*/
+
+	      HAL_Delay(500);
+	    buf[0] = 0x52;
+	    buf[1] = 0x02;
+	    buf[2] = 0x00;
+	    ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
+	    HAL_Delay(45);
+	    ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
+
+	      if(buf[0] != 0x00 || ret != HAL_OK ){
+	        printf("Error Enabling Algorithm code: %x\n\r", buf[0]);
+	      }
+	      printf("enable algorithm \n");
+
+
+
+
+	    HAL_Delay(1000);
+
+  /*--------------end------------------*/
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -581,46 +677,42 @@ int main(void)
             int status = 0;
             for(int i = 0; i < 40; ++i){
             	ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 2, 5000);
-				HAL_Delay(6);
-				ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 10, 5000);
-				printf("code: %d ", buf[0]);
-				int heartRate = ((buf[1]) << 8);
-				printf("%d %d %d %d\n", buf[1], buf[2], buf[3], buf[6]);
-				heartRate |= (buf[2]);
-				heartRate = heartRate/10;
-				heart_rate = heartRate;
-				// Confidence formatting
-				int confidence = buf[3];
+				      HAL_Delay(6);
+				      ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 10, 5000);
+				      printf("code: %d ", buf[0]);
+				      int heartRate = ((buf[1]) << 8);
+				      printf("%d %d %d %d\n", buf[1], buf[2], buf[3], buf[6]);
+				      heartRate |= (buf[2]);
+				      heartRate = heartRate/10;
+				      heart_rate = heartRate;
+				      // Confidence formatting
+				      int confidence = buf[3];
 
-				//Blood oxygen level formatting
-				int oxygen = (buf[4]) << 8;
-				oxygen += buf[5];
-				blood_oxygen = oxygen/10.0;
-				// blood_oxygen = oxygen;
+				      //Blood oxygen level formatting
+				      int oxygen = (buf[4]) << 8;
+				      oxygen += buf[5];
+				      blood_oxygen = oxygen/10.0;
+				      // blood_oxygen = oxygen;
 
-				//"Machine State" - has a finger been detected?
+				      //"Machine State" - has a finger been detected?
 
-				status = buf[6];
-				printf( "heartrate: %d, status: %d, blood_oxygen %f, confidence: %d\n\r", heartRate, status, oxygen, confidence );
-				/*
-				if(status == 3){
-					if(heartRate != 0){
-						heart_rate = heartRate;
+				      status = buf[6];
+				      printf( "heartrate: %d, status: %d, blood_oxygen %f, confidence: %d\n\r", heartRate, status, oxygen, confidence );
+				      /*
+				      if(status == 3){
+					      if(heartRate != 0){
+						      heart_rate = heartRate;
 
-					}
-					if(oxygen != 0){
-						blood_oxygen = oxygen;
+					      }
+					      if(oxygen != 0){
+						      blood_oxygen = oxygen;
 
-					}
+					      }
 
-				}
-				*/
-				HAL_Delay(100);
-
-
-
-
-            }
+				      }
+				      */
+				      HAL_Delay(100);
+            } // end for
 
             //get GPS
             float latitude = 0;
