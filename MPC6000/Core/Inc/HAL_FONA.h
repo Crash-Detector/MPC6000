@@ -68,6 +68,7 @@ bool send_check_reply( Cellular_module_t * const cell_ptr, char const * const se
                         char const * const reply, const uint16_t timeout );
 
 bool sendSMS(Cellular_module_t * const cell_ptr, char const * const sms_message );
+bool setNetworkSettings(Cellular_module_t * const cell_ptr);
 // int available( Cellular_module_t * const cell_mod_ptr );
 /*
 size_t write(Cellular_module_t * const cell_mod_ptr, uint8_t x);

@@ -28,6 +28,22 @@ void GPIO_Write( HAL_GPIO_t const * const gpio_ptr, const GPIO_PinState pin_stat
     HAL_GPIO_WritePin( gpio_ptr->GPIOx, gpio_ptr->GPIO_Pin, pin_state );
     } // GPIO_Write( )
 
+void power_on_cell( )
+    {
+    printf( "Powering On Cell\n\r" );
+    GPIO_Write( &pwr_pin, GPIO_PIN_RESET );
+	  HAL_Delay( 1100 ); // At least 1s
+    GPIO_Write( &pwr_pin, GPIO_PIN_SET );
+    } // end power_on( )
+
+void reset_cell( )
+    {
+    printf( "Resetting Cell\n\r" );
+    GPIO_Write( &rst_pin, GPIO_PIN_RESET );
+    HAL_Delay( 100 ); // At least 1s
+    GPIO_Write( &rst_pin, GPIO_PIN_SET );
+    } // reset_cell( )
+
 /*
 int available( Cellular_module_t * cell_mod_ptr )
     {
@@ -49,7 +65,7 @@ int available( Cellular_module_t * cell_mod_ptr )
 */
 bool begin( Cellular_module_t * const cell_ptr )
     {
-    power_on_cell( );
+	power_on_cell( );
     reset_cell( );
     if ( cell_ptr->uart_ptr )
         {
@@ -256,7 +272,7 @@ void println( UART_HandleTypeDef * const uart_ptr, const char * const message )
 //
 //------------------------------------------------------------------------------------------------
 
-bool setNetworkSettings(Cellular_module_t * const cell_ptr){
+bool setNetworkSettings(Cellular_module_t * const cell_ptr) {
 
 	//if ( send_check_reply( cell_ptr, "AT+CGDCONT=1,\"IP\",\"hologram"", ok_reply_c, 10000 ) )
 	flushInput( cell_ptr->uart_ptr );
@@ -266,7 +282,7 @@ bool setNetworkSettings(Cellular_module_t * const cell_ptr){
 	return false;
 }
 
-bool sendSMS(Cellular_module_t * const cell_ptr){
+bool sendSMS(Cellular_module_t * const cell_ptr, char const * const sms_message ){
 
 	flushInput( cell_ptr->uart_ptr );
 
@@ -283,12 +299,13 @@ bool sendSMS(Cellular_module_t * const cell_ptr){
 
 	uint8_t buffer_pass[1024];
 
-	char *pass_buff = "eecs373";
+	//char *pass_buff = "eecs373";
     const char sub_ch = 0x1A;
-	sprintf( buffer_pass, "%s%c", pass_buff, sub_ch );
+	sprintf( buffer_pass, "%s%c", sms_message, sub_ch );
+    printf( "--> AT SMS Message: %s\n\r", sms_message );
+    //HAL_UART_Transmit( cell_ptr->uart_ptr, ( uint8_t * ) sms_message, strlen( sms_message ), fona_def_timeout_ms_c );
+    //HAL_UART_Transmit( cell_ptr->uart_ptr, ( uint8_t * ) &sub_ch, 1, fona_def_timeout_ms_c );
     HAL_UART_Transmit( cell_ptr->uart_ptr, ( uint8_t * ) buffer_pass, strlen( buffer_pass ), fona_def_timeout_ms_c );
-	// HAL_UART_Transmit( cell_ptr->uart_ptr, ( uint8_t * ) pass_buff, strlen( pass_buff ), fona_def_timeout_ms_c );
-	// HAL_UART_Transmit( cell_ptr->uart_ptr, ( uint8_t * ) &sub_ch, 1, fona_def_timeout_ms_c );
 	//transmit( cell_ptr,  "hi" , fona_def_timeout_ms_c );
 	//transmit( cell_ptr,  &pass_buff , fona_def_timeout_ms_c );
 	readline(cell_ptr, 200, false);
@@ -311,6 +328,7 @@ bool sendSMS(Cellular_module_t * const cell_ptr){
 	return true;
 
 }
+
 /*
 
 uint8_t getNetworkStatus(){
