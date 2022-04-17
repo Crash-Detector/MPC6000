@@ -2,6 +2,13 @@
 #include "HAL_FONA.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+
+#define max(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a > _b ? _a : _b; })
+
 
 char const * const ok_reply_c = "OK";
 const int reply_buff_size_c = 256;
@@ -329,12 +336,100 @@ bool sendSMS(Cellular_module_t * const cell_ptr, char const * const sms_message 
 
 }
 
-/*
+//------------------------------------------------------------------------------------------------
+//
+//                                  GPS Settings
+//
+//------------------------------------------------------------------------------------------------
 
-uint8_t getNetworkStatus(){
-	uint16_t status;
-	//if (! sendParseReply(F("AT+CGREG?"), F("+CGREG: "), &status, ',', 1)) return 0;
+bool enableGPS(Cellular_module_t * const cell_ptr, bool onoff) {
 
-}*/
+	uint8_t state;
+	//if (! sendParseReply(F("AT+CGNSPWR?"), F("+CGNSPWR: "), &state) )
+    //return false;
+	//if ( !send_check_reply( cell_ptr, "AT+CGNSPWR?", "+CGNSPWR: ", fona_def_timeout_ms_c ) ){}
+	uint8_t ret = transmit( cell_ptr,  "AT+CGNSPWR?" , fona_def_timeout_ms_c);
+
+	printf ("%d\n", ret);
+
+	if (strstr(cell_ptr->reply_buffer, "+CGNSPWR: 0") == 0) {
+		state =1;
+	}
+	else state =0;
+
+	if (onoff && !state) {
+		//if (! sendCheckReply(F("AT+CGNSPWR=1"), ok_reply))
+		if ( !send_check_reply( cell_ptr, "AT+CGNSPWR=1", ok_reply_c, fona_def_timeout_ms_c ) ){
+        return false;
+		}
+	}
+
+	else if (!onoff && state) {
+	if ( !send_check_reply( cell_ptr, "AT+CGNSPWR=0", ok_reply_c, fona_def_timeout_ms_c ) ){
+		return false;
+		}
+	}
+
+	return true;
+}
+
+uint8_t get_GPS(Cellular_module_t * const cell_ptr, uint8_t arg, char *buffer, uint8_t maxbuff){
+
+	transmit( cell_ptr,  "AT+CGNSINF" , fona_def_timeout_ms_c);
+
+	char *p = strstr(cell_ptr->reply_buffer, "SINF");
+
+	printf("%s\n",cell_ptr->reply_buffer );
+
+	if (p == 0) {
+	    buffer[0] = 0;
+	    return 0;
+	  }
+
+	  p+=6;
+
+	  uint8_t len = max(maxbuff-1, (int)strlen(p));
+	  strncpy(buffer, p, len);
+	  buffer[len] = 0;
+
+	  //readline(); // eat 'OK'
+	  return len;
+
+	}
+
+bool gGPS(Cellular_module_t * const cell_ptr ,float *lat, float *lon){
+
+	flushInput( cell_ptr->uart_ptr );
+
+	char gpsbuffer[120];
+
+	uint8_t res_len = get_GPS(cell_ptr, 32, gpsbuffer, 120);
+
+	if (res_len == 0){
+	    return false;
+	}
+
+	const int commas_to_see = 5;
+	int commas_seen = 0;
+
+	for ( const char *gps_start_ptr = gpsbuffer, * const gps_end = gpsbuffer + res_len;
+				gps_start_ptr != gps_end && commas_seen != commas_to_see; ++commas_seen)
+		{
+		const char *gps_ptr = gps_start_ptr;
+		while( *gps_ptr != ',' ) { ++gps_ptr; } // Skipping until finds comma
+		if ( commas_seen == 3 ) // Seen the <gps status, run status, time>
+			{
+			*lat = ( gps_ptr != gps_start_ptr ) ? atof( gps_start_ptr ) : 0.0;
+			} // end if
+		else if ( commas_seen == 4 ) // Seen the <gps status, run status, time, latitude>
+			{
+			*lon = ( gps_ptr != gps_start_ptr ) ? atof( gps_start_ptr ) : 0.0;
+			} // end else if
+		gps_start_ptr = gps_ptr + 1; // Skip comma
+		} // end while
+	return commas_seen == commas_to_see;
+
+}
+
 
 
