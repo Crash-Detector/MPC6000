@@ -399,186 +399,164 @@ int main(void)
 
 
   /*biometric sensor setup*/
-  /*--------------begin------------------*/
-	  HAL_StatusTypeDef ret;
-	  uint8_t buf[10];
-	  int HM_samples = 0x1;
-  	  bio_sensor_init( &sensor, &hi2c1, HM_ADDR, rst_pin_c, mfio_pin_c, def_sample_rate, DISABLE );
-	  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_0,  0); // Reset pin
-	  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_1,  1); // MFIO pin
-	  HAL_Delay(10);
-	  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_0,  1); // Reset is pulled
-	  HAL_Delay(50);
-	  HAL_Delay(1000);
+      /*--------------begin------------------*/
+    	  HAL_StatusTypeDef ret;
+    	  uint8_t buf[20];
+    	  int HM_samples = 0x1;
+    	  bio_sensor_init( &sensor, &hi2c1, HM_ADDR, rst_pin_c, mfio_pin_c, def_sample_rate, DISABLE );
+    	  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_0,  0); // Reset pin
+    	  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_1,  1); // MFIO pin
+    	  HAL_Delay(10);
+    	  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_0,  1); // Reset is pulled
+    	  HAL_Delay(50);
+    	  HAL_Delay(1000);
 
-	  buf[0] = 0x02;
-	  buf[1] = 0x00;
-	  ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 2, 5000);
-	  HAL_Delay(6);
-	  ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 2, 5000);
-	  printf("error code: %x application mode: %x\n\r", buf[0],buf[1]);
-	  set_pin_mode( &sensor._mfio_pin, IN );
+    	  buf[0] = 0x02;
+    	  buf[1] = 0x00;
+    	  ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 2, 5000);
+    	  HAL_Delay(6);
+    	  ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 2, 5000);
+    	  printf("error code: %x application mode: %x\n\r", buf[0],buf[1]);
+    	  set_pin_mode( &sensor._mfio_pin, IN );
 
-	  /*set our mode to MODE 1*/
-	    buf[0] = 0x10;
-	    buf[1] = 0x00;
-	    buf[2] = 0x02;
-	    ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
-	    HAL_Delay(6);
-	    ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
-	    if(buf[0] != 0x00 || ret != HAL_OK ){
-	        printf("Error setting mode: code %x\n\r", buf[0]);
-	    }
-	    printf("mode set to raw and algo\n");
+    	  buf[0] = 0x50;
+    	  buf[1] = 0x02; //says 02 in another place
+    	  buf[2] = 0x0B;
 
-	    /*Set FIFO threshold as almost full at 0x0F*/
-	    buf[0] = 0x10;
-	    buf[1] = 0x01;
-	    buf[2] = 0x1;
-	    ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
-	    HAL_Delay(6);
-	    ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
-	      if(buf[0] != 0x00 || ret != HAL_OK ){
-	        printf("Error setting FIFO threshold code: %x\n\r", buf[0]);
-	      }
-	    printf("fifo set\n");
-	    /*disable AGC*/
-	    buf[0] = 0x52;
-	      buf[1] = 0x00;
-	      buf[2] = 0x1;
-	      ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
-	      HAL_Delay(25);
-	      ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
-	        if(buf[0] != 0x00 || ret != HAL_OK ){
-	          printf("Error Enabling Algorithm code: %x\n\r", buf[0]);
-	        }
-	       printf("enable AGC \n");
+    	  //A
+    	  buf[3] = 0x00;
+    	  buf[4] = 0x02;
+    	  buf[5] = 0x6F;
+    	  buf[6] = 0x60;
 
+    	  //B
+    	  buf[7] = 0xFF;
+    	  buf[8] = 0xCB;
+    	  buf[9] = 0x1D;
+    	  buf[10] = 0x12;
 
+    	    	//C
+    	  buf[11] = 0x00;
+    	  buf[12] = 0xAB;
+    	  buf[13] = 0xF3;
+    	  buf[14] = 0x7B;
 
-	    /*Disable the sensor*/
-	    buf[0] = 0x44;
-	    buf[1] = 0x03;
-	    buf[2] = 0x1;
-	    ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
-	    HAL_Delay(45);
-	    ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
-	      if(buf[0] != 0x00 || ret != HAL_OK ){
-	        printf("Error enabling sensor code: %x\n\r", buf[0]);
-	      }
-	      printf("sensor set\n");
-
-
-	    /*Disable the algorithm*/
-
-	      HAL_Delay(500);
-	    buf[0] = 0x52;
-	    buf[1] = 0x02;
-	    buf[2] = 0x1;
-	    ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
-	    HAL_Delay(45);
-	    ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
-
-	      if(buf[0] != 0x00 || ret != HAL_OK ){
-	        printf("Error Enabling Algorithm code: %x\n\r", buf[0]);
-	      }
-	      printf("enable algorithm \n");
+    	ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 15, 5000);
+    	  HAL_Delay(20);
+    	  ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
+    	  if(buf[0] != 0x00 || ret != HAL_OK ){
+    		  printf("Error setting mode: code %x\n\r", buf[0]);
+    	  }
+    	printf("Callibrated SpO2!\n");
 
 
 
 
-	    HAL_Delay(1000);
-
-  /*--------------end------------------*/
 
 
 
-  /*biometric sensor setup*/
-  /*--------------begin------------------*/
-	  HAL_StatusTypeDef ret;
-	  uint8_t buf[10];
-	  int HM_samples = 0x1;
-  	  bio_sensor_init( &sensor, &hi2c1, HM_ADDR, rst_pin_c, mfio_pin_c, def_sample_rate, DISABLE );
-	  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_0,  0); // Reset pin
-	  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_1,  1); // MFIO pin
-	  HAL_Delay(10);
-	  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_0,  1); // Reset is pulled
-	  HAL_Delay(50);
-	  HAL_Delay(1000);
+    	  /*set our mode to MODE 1*/
+    	    buf[0] = 0x10;
+    	    buf[1] = 0x00;
+    	    buf[2] = 0x02;
+    	    ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
+    	    HAL_Delay(6);
+    	    ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
+    	    if(buf[0] != 0x00 || ret != HAL_OK ){
+    	        printf("Error setting mode: code %x\n\r", buf[0]);
+    	    }
+    	    printf("mode set to raw and algo\n");
 
-	  buf[0] = 0x02;
-	  buf[1] = 0x00;
-	  ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 2, 5000);
-	  HAL_Delay(6);
-	  ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 2, 5000);
-	  printf("error code: %x application mode: %x\n\r", buf[0],buf[1]);
-	  set_pin_mode( &sensor._mfio_pin, IN );
-
-	  /*set our mode to MODE 1*/
-	    buf[0] = 0x10;
-	    buf[1] = 0x00;
-	    buf[2] = 0x02;
-	    ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
-	    HAL_Delay(6);
-	    ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
-	    if(buf[0] != 0x00 || ret != HAL_OK ){
-	        printf("Error setting mode: code %x\n\r", buf[0]);
-	    }
-	    printf("mode set to raw and algo\n");
-
-	    /*Set FIFO threshold as almost full at 0x0F*/
-	    buf[0] = 0x10;
-	    buf[1] = 0x01;
-	    buf[2] = samples;
-	    ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
-	    HAL_Delay(6);
-	    ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
-	      if(buf[0] != 0x00 || ret != HAL_OK ){
-	        printf("Error setting FIFO threshold code: %x\n\r", buf[0]);
-	      }
-	    printf("fifo set\n");
-
-	    /*disable AGC*/
-	    buf[0] = 0x52;
-	      buf[1] = 0x00;
-	      buf[2] = 0x00;
-	      ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
-	      HAL_Delay(25);
-	      ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
-	        if(buf[0] != 0x00 || ret != HAL_OK ){
-	          printf("Error Enabling Algorithm code: %x\n\r", buf[0]);
-	        }
-	       printf("enable AGC \n");
+    	    /*Set FIFO threshold as almost full at 0x0F*/
+    	    buf[0] = 0x10;
+    	    buf[1] = 0x01;
+    	    buf[2] = 0x1;
+    	    ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
+    	    HAL_Delay(6);
+    	    ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
+    	      if(buf[0] != 0x00 || ret != HAL_OK ){
+    	        printf("Error setting FIFO threshold code: %x\n\r", buf[0]);
+    	      }
+    	    printf("fifo set\n");
+    	    /*enable AGC*/
+    	    buf[0] = 0x52;
+    	      buf[1] = 0x00;
+    	      buf[2] = 0x1;
+    	      ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
+    	      HAL_Delay(25);
+    	      ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
+    	        if(buf[0] != 0x00 || ret != HAL_OK ){
+    	          printf("Error Enabling Algorithm code: %x\n\r", buf[0]);
+    	        }
+    	       printf("enable AGC \n");
 
 
 
-	    /*Disable the sensor*/
-	    buf[0] = 0x44;
-	    buf[1] = 0x03;
-	    buf[2] = 0x00;
-	    ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
-	    HAL_Delay(45);
-	    ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
-	      if(buf[0] != 0x00 || ret != HAL_OK ){
-	        printf("Error enabling sensor code: %x\n\r", buf[0]);
-	      }
-	      printf("sensor set\n");
+    	    /*enable the sensor*/
+    	    buf[0] = 0x44;
+    	    buf[1] = 0x03;
+    	    buf[2] = 0x1;
+    	    ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
+    	    HAL_Delay(45);
+    	    ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
+    	      if(buf[0] != 0x00 || ret != HAL_OK ){
+    	        printf("Error enabling sensor code: %x\n\r", buf[0]);
+    	      }
+    	      printf("sensor set\n");
 
 
-	    /*Disable the algorithm*/
+    	    /*enable the algorithm*/
 
-	      HAL_Delay(500);
-	    buf[0] = 0x52;
-	    buf[1] = 0x02;
-	    buf[2] = 0x00;
-	    ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
-	    HAL_Delay(45);
-	    ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
+    	      HAL_Delay(500);
+    	    buf[0] = 0x52;
+    	    buf[1] = 0x02;
+    	    buf[2] = 0x1;
+    	    ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
+    	    HAL_Delay(45);
+    	    ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
 
-	      if(buf[0] != 0x00 || ret != HAL_OK ){
-	        printf("Error Enabling Algorithm code: %x\n\r", buf[0]);
-	      }
-	      printf("enable algorithm \n");
+    	      if(buf[0] != 0x00 || ret != HAL_OK ){
+    	        printf("Error Enabling Algorithm code: %x\n\r", buf[0]);
+    	      }
+    	      printf("enable algorithm \n");
+
+
+    	    //setting LED 2 amplitude
+    	    buf[0] = 0x40;
+    		buf[1] = 0x03;
+    		buf[2] = 0x0D;
+    		buf[3] = 0x7F;
+    		ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 4, 5000);
+    		HAL_Delay(45);
+    		ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
+
+    		  if(buf[0] != 0x00 || ret != HAL_OK ){
+    			printf("Error Changing LED2: %x\n\r", buf[0]);
+    		  }
+    		  printf("modified LED2 amplitude \n");
+
+
+    		  //setting LED 1 amplitude
+    		buf[0] = 0x40;
+    		buf[1] = 0x03;
+    		buf[2] = 0x0C;
+    		buf[3] = 0x7F;
+    		ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 4, 5000);
+    		HAL_Delay(45);
+    		ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
+
+    		  if(buf[0] != 0x00 || ret != HAL_OK ){
+    			printf("Error Changing LED1: %x\n\r", buf[0]);
+    		  }
+    		  printf("modified LED1 amplitude \n");
+
+
+
+
+
+
+
+
 
 
 
@@ -586,6 +564,7 @@ int main(void)
 	    HAL_Delay(1000);
 
   /*--------------end------------------*/
+
 
   /* USER CODE END 2 */
 
@@ -596,6 +575,11 @@ int main(void)
   SetupMPU();
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
   TIM4->CCR2 = 0;
+  int heart_rate = 0;
+  int heart_rate_count = 1;
+  float blood_oxygen = 0;
+  int blood_oxygen_count = 1;
+  int status = 0;
 
   NVIC_EnableIRQ(EXTI4_IRQn);
     while(1)
@@ -605,126 +589,67 @@ int main(void)
             MPUSleep(); /* turn off MPU */
             Beep_sos(); /* 30 sec */
             Beep_sendmsg_warning(); /* 3 sec */
-
-
-
-            /*Enable the sensor*/
-            					/*enable AGC*/
-								buf[0] = 0x52;
-								buf[1] = 0x00;
-								buf[2] = 0x01;
-								ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
-								HAL_Delay(25);
-								ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
-								if(buf[0] != 0x00 || ret != HAL_OK ){
-									printf("Error Enabling Algorithm code: %x\n\r", buf[0]);
-								}
-								printf("enable AGC \n");
-
-
-
-//								/*Enable the sensor*/
-//								buf[0] = 0x44;
-//								buf[1] = 0x03;
-//								buf[2] = 0x00;
-//								ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
-//								HAL_Delay(45);
-//								ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
-//								  if(buf[0] != 0x00 || ret != HAL_OK ){
-//									printf("Error enabling sensor code: %x\n\r", buf[0]);
-//								  }
-//								  printf("sensor set\n");
-//
-//
-//
-//            					buf[0] = 0x44;
-//            					buf[1] = 0x03;
-//            					buf[2] = 0x01;
-//            					ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
-//            					HAL_Delay(45);
-//            					ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
-//            					if(buf[0] != 0x00 || ret != HAL_OK ){
-//            						printf("Error enabling sensor code: %x\n\r", buf[0]);
-//            					}
-//            						printf("sensor set\n");
-//
-//
-//            						/*Enable the algorithm*/
-//
-//            					HAL_Delay(500);
-//            					buf[0] = 0x52;
-//            					buf[1] = 0x02;
-//            					buf[2] = 0x01;
-//            					ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 3, 5000);
-//            					HAL_Delay(45);
-//            					ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 1, 5000);
-//
-//            					if(buf[0] != 0x00 || ret != HAL_OK ){
-//            						printf("Error Enabling Algorithm code: %x\n\r", buf[0]);
-//            					}
-//            						printf("enable algorithm \n");
-//
-//            					HAL_Delay(1000); //wait for the data to load
-
-
-
-
             // read biometric sensor
             buf[0] = 0x12;
             buf[1] = 0x01;
-            int heart_rate = 0;
-            float blood_oxygen = 0;
-            int status = 0;
+
             for(int i = 0; i < 40; ++i){
+            	buf[0] = 0x00;
+            	buf[1] = 0x00;
+            	ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 2, 5000);
+					  HAL_Delay(6);
+					  ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 2, 5000);
+				printf("status: %d %d \n",buf[0], buf[1]);
+
+				buf[0] = 0x12;
+				buf[1] = 0x01;
             	ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 2, 5000);
 				      HAL_Delay(6);
 				      ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 10, 5000);
-				      printf("code: %d ", buf[0]);
+				      printf("error code: %d ", buf[0]);
 				      int heartRate = ((buf[1]) << 8);
-				      printf("%d %d %d %d\n", buf[1], buf[2], buf[3], buf[6]);
+				      printf("data: %d %d %d %d\n", buf[1], buf[2], buf[3], buf[6]);
 				      heartRate |= (buf[2]);
 				      heartRate = heartRate/10;
-				      heart_rate = heartRate;
+				      heart_rate += heartRate;
+				      if(heartRate != 0){
+				    	  heart_rate_count += 1;
+				      }
+
 				      // Confidence formatting
 				      int confidence = buf[3];
 
 				      //Blood oxygen level formatting
 				      int oxygen = (buf[4]) << 8;
 				      oxygen += buf[5];
-				      blood_oxygen = oxygen/10.0;
-				      // blood_oxygen = oxygen;
+				      blood_oxygen += oxygen/10.0;
+
+				      if(blood_oxygen != 0){
+				    	  blood_oxygen_count += 1;
+				      	}
 
 				      //"Machine State" - has a finger been detected?
 
 				      status = buf[6];
 				      printf( "heartrate: %d, status: %d, blood_oxygen %f, confidence: %d\n\r", heartRate, status, oxygen, confidence );
-				      /*
-				      if(status == 3){
-					      if(heartRate != 0){
-						      heart_rate = heartRate;
 
-					      }
-					      if(oxygen != 0){
-						      blood_oxygen = oxygen;
-
-					      }
-
-				      }
-				      */
 				      HAL_Delay(100);
             } // end for
+            heart_rate = heart_rate/heart_rate_count;
+            blood_oxygen = blood_oxygen/blood_oxygen_count;
 
             //get GPS
             float latitude = 0;
             float longitude= 0;
+            printf("status: %d", status);
 
 
 
             if(status != 3){
-            	sprintf(message_buffer, "SOS! An athlete has fallen and been injured at %d latitude %d longitude. There finger is off the vitals sensor but we measured: heart rate: %d blood oxygen: %d", latitude, longitude, heart_rate, blood_oxygen);
+            	sprintf(message_buffer, "SOS! An athlete has fallen and been injured at %f latitude %f longitude. There finger is off the vitals sensor but we measured: heart rate: %d blood oxygen: %d", latitude, longitude, heart_rate, blood_oxygen);
             }
             else{
-            	sprintf(message_buffer, "SOS! An athlete has fallen and been injured at %d latitude %d longitude. The vitals sensor measured: heart rate: %d blood oxygen: %d", latitude, longitude, heart_rate, blood_oxygen);
+            	sprintf(message_buffer, "SOS! An athlete has fallen and been injured at %f latitude %f longitude. The vitals sensor measured: heart rate: %d blood oxygen: %d", latitude, longitude, heart_rate, blood_oxygen);
             }
 
 
