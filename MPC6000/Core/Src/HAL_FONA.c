@@ -78,7 +78,7 @@ bool begin( Cellular_module_t * const cell_ptr )
         {
         printf( "Attempting to open comm with ATs\n\r" );
 
-        int16_t timeout = 14000;
+        int16_t timeout = 28000;
 
         while( timeout > 0 )
             {
@@ -91,8 +91,8 @@ bool begin( Cellular_module_t * const cell_ptr )
             if ( send_check_reply( cell_ptr, "AT", "AT", fona_def_timeout_ms_c ) )
                 break;
             // printf( "Failed \n\r\n\r" );
-            HAL_Delay( 500 );
-            timeout -= 500;
+            HAL_Delay( fona_def_timeout_ms_c );
+            timeout -= fona_def_timeout_ms_c;
             } // end while
         
         if( timeout <= 0 )
