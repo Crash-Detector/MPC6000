@@ -294,13 +294,13 @@ bool sendSMS(Cellular_module_t * const cell_ptr, char const * const sms_message 
 	flushInput( cell_ptr->uart_ptr );
 
 	if ( !send_check_reply( cell_ptr, "AT+CMGF=1", ok_reply_c, fona_def_timeout_ms_c ) ){
-	printf("Failed sendCheckReply");
+	printf("Failed sendCheckReply\n\r");
 	return false;
 	}
 
 	//if (! sendCheckReply("AT+CMGS=\"18024246417\"", "> ")) return false;
 	if ( !send_check_reply( cell_ptr, "AT+CMGS=\"18024246417\"", "> ", fona_def_timeout_ms_c ) ){
-	printf("Failed establishing phone address");
+	printf("Failed establishing phone address\n\r");
 	return false;
 	}
 
@@ -397,39 +397,40 @@ uint8_t get_GPS(Cellular_module_t * const cell_ptr, uint8_t arg, char *buffer, u
 
 	}
 
-bool gGPS(Cellular_module_t * const cell_ptr ,float *lat, float *lon){
+bool gGPS(Cellular_module_t * const cell_ptr ,float *lat, float *lon)
+        {
 
-	flushInput( cell_ptr->uart_ptr );
+    flushInput( cell_ptr->uart_ptr );
 
-	char gpsbuffer[120];
+    char gpsbuffer[120];
 
-	uint8_t res_len = get_GPS(cell_ptr, 32, gpsbuffer, 120);
+    uint8_t res_len = get_GPS(cell_ptr, 32, gpsbuffer, 120);
 
-	if (res_len == 0){
-	    return false;
-	}
+    if (res_len == 0) {
+        return false;
+    }
 
-	const int commas_to_see = 5;
-	int commas_seen = 0;
+    const int commas_to_see = 5;
+    int commas_seen = 0;
 
-	for ( const char *gps_start_ptr = gpsbuffer, * const gps_end = gpsbuffer + res_len;
-				gps_start_ptr != gps_end && commas_seen != commas_to_see; ++commas_seen)
-		{
-		const char *gps_ptr = gps_start_ptr;
-		while( *gps_ptr != ',' ) { ++gps_ptr; } // Skipping until finds comma
-		if ( commas_seen == 3 ) // Seen the <gps status, run status, time>
-			{
-			*lat = ( gps_ptr != gps_start_ptr ) ? atof( gps_start_ptr ) : 0.0;
-			} // end if
-		else if ( commas_seen == 4 ) // Seen the <gps status, run status, time, latitude>
-			{
-			*lon = ( gps_ptr != gps_start_ptr ) ? atof( gps_start_ptr ) : 0.0;
-			} // end else if
-		gps_start_ptr = gps_ptr + 1; // Skip comma
-		} // end while
-	return commas_seen == commas_to_see;
+    for ( const char *gps_start_ptr = gpsbuffer, * const gps_end = gpsbuffer + res_len;
+                gps_start_ptr != gps_end && commas_seen != commas_to_see; ++commas_seen )
+        {
+        const char *gps_ptr = ++gps_start_ptr; // Skips comma (All except the first execution)
+        while( gps_ptr != gps_end && *gps_ptr != ',' ) { ++gps_ptr; } // Skipping until finds comma
+        if ( commas_seen == 3 ) // Seen the <gps status, run status, time>
+            {
+            *lat = ( gps_ptr != gps_start_ptr ) ? atof( gps_start_ptr ) : 0.0;
+            } // end if
+        else if ( commas_seen == 4 ) // Seen the <gps status, run status, time, latitude>
+            {
+            *lon = ( gps_ptr != gps_start_ptr ) ? atof( gps_start_ptr ) : 0.0;
+            } // end else if
+        gps_start_ptr = gps_ptr;
+        } // end for
 
-}
+    return commas_seen == commas_to_see;
+    }
 
 
 
