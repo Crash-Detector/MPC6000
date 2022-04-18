@@ -37,7 +37,8 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 /* USER CODE END PD */
-
+float latitude = 0;
+float longitude = 0;
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
 #define MPU_SampleRate 80 /* in Hz */
@@ -269,6 +270,7 @@ void push_MPU_data(MPU_measure m){
 }
 
 void MPU_Interrupt(){
+    if (fall_detected) return;
     /* read MPU */
     MPU_measure mpu_data = getMPU();
     push_MPU_data(mpu_data);
@@ -276,13 +278,17 @@ void MPU_Interrupt(){
 
     /* clear interrupt*/
     uint8_t mpu_int_status;
-    readMPU(&mpu_int_status, MPU_INT_STATUS, 1);
-    if ((mpu_int_status & 0b1) != 1) {
-        printf("[ERROR] MPU interrupt Clear Failed!!!!\n");
-        exit(1);
+    while(1){
+        if (fall_detected) return;
+        readMPU(&mpu_int_status, MPU_INT_STATUS, 1);
+        if ((mpu_int_status & 0b1) != 1) {
+            printf("[ERROR] MPU interrupt Clear Failed!!!!\n");
+            continue;
+        }
+        break;
     }
-}
 
+}
 
 void Beep_sos(){
     TIM4->ARR = 2000;
@@ -374,7 +380,7 @@ int main(void)
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   printf("\r\n");
-
+  MPUSleep();
   printf( "Initializing!\n\r" );
   if ( !begin( &cell ) )
     {
@@ -396,6 +402,17 @@ int main(void)
     printf( "Network settings set\n\r" );
     }
   // initialized = 1;
+
+
+  if ( !enableGPS( &cell, true ) ){
+
+		printf( "GPS enable has failed\n\t" );
+		return 1;
+	  }
+	  else{
+		printf( "GPS enable has worked\n\r" );
+	  }
+
 
 
   /*biometric sensor setup*/
@@ -575,11 +592,7 @@ int main(void)
   SetupMPU();
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
   TIM4->CCR2 = 0;
-  int heart_rate = 0;
-  int heart_rate_count = 1;
-  float blood_oxygen = 0;
-  int blood_oxygen_count = 1;
-  int status = 0;
+
 
   NVIC_EnableIRQ(EXTI4_IRQn);
     while(1)
@@ -593,7 +606,13 @@ int main(void)
             buf[0] = 0x12;
             buf[1] = 0x01;
 
-            for(int i = 0; i < 40; ++i){
+            int heart_rate = 0;
+            int heart_rate_count = 0;
+            float blood_oxygen = 0;
+            int blood_oxygen_count = 0;
+            int status = 0;
+
+            for(int i = 0; i < 200; ++i){
             	buf[0] = 0x00;
             	buf[1] = 0x00;
             	ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 2, 5000);
@@ -631,32 +650,55 @@ int main(void)
 				      //"Machine State" - has a finger been detected?
 
 				      status = buf[6];
-				      printf( "heartrate: %d, status: %d, blood_oxygen %f, confidence: %d\n\r", heartRate, status, oxygen, confidence );
+				      printf( "heartrate: %d, status: %d, blood_oxygen %d, confidence: %d\n\r", heartRate, status, oxygen, confidence );
 
 				      HAL_Delay(100);
             } // end for
+            if (heart_rate_count!=0){
             heart_rate = heart_rate/heart_rate_count;
-            blood_oxygen = blood_oxygen/blood_oxygen_count;
+            }
 
+            if (blood_oxygen_count!=0){
+            blood_oxygen = blood_oxygen/blood_oxygen_count;
+            }
             //get GPS
-            float latitude = 0;
-            float longitude= 0;
+
+
+            for(int i = 0; i<20; i++){
+            	float lat = 0;
+            	float lon= 0;
+            	if ( !gGPS( &cell, &lat, &lon ) ){
+					printf( "GPS read has failed \n\t");
+					//return 1;
+				  }
+            	else{
+					if (lat !=0 || lon !=0){
+						latitude = lat;
+						longitude = lon;
+
+					break;
+					}
+				  }
+
+			  }
+
+
             printf("status: %d", status);
 
 
 
             if(status != 3){
-            	sprintf(message_buffer, "SOS! An athlete has fallen and been injured at %f latitude %f longitude. There finger is off the vitals sensor but we measured: heart rate: %d blood oxygen: %d", latitude, longitude, heart_rate, blood_oxygen);
+            	sprintf(message_buffer, "SOS! Injured at %f latitude %f longitude. Finger is off the sensor! measured: heart rate: %d blood oxygen: %d", latitude, longitude, heart_rate, (int)blood_oxygen);
             }
             else{
-            	sprintf(message_buffer, "SOS! An athlete has fallen and been injured at %f latitude %f longitude. The vitals sensor measured: heart rate: %d blood oxygen: %d", latitude, longitude, heart_rate, blood_oxygen);
+            	sprintf(message_buffer, "SOS! Injured at %f latitude %f longitude. Heart rate: %d blood oxygen: %d", latitude, longitude, heart_rate, (int)blood_oxygen);
             }
 
 
             // send out message
             printf( "Here's the sos message: %s\n\r", message_buffer );
             HAL_Delay( 1000 );
-            //sendSMS( &cell, message_buffer );
+            sendSMS( &cell, message_buffer );
             fall_detected = 0;
             SetupMPU(); /* reset MPU */
             Beep_reset();
