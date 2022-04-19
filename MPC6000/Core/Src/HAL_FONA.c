@@ -78,8 +78,7 @@ bool begin( Cellular_module_t * const cell_ptr )
         {
         printf( "Attempting to open comm with ATs\n\r" );
 
-        int16_t timeout = 28000;
-
+        int16_t timeout = 48;
         while( timeout > 0 )
             {
             flushInput( cell_ptr->uart_ptr );
@@ -92,7 +91,7 @@ bool begin( Cellular_module_t * const cell_ptr )
                 break;
             // printf( "Failed \n\r\n\r" );
             HAL_Delay( fona_def_timeout_ms_c );
-            timeout -= fona_def_timeout_ms_c;
+            --timeout;
             } // end while
         
         if( timeout <= 0 )
@@ -105,10 +104,11 @@ bool begin( Cellular_module_t * const cell_ptr )
         // Turn off Echo
         send_check_reply( cell_ptr, "ATE0", ok_reply_c, fona_def_timeout_ms_c );
         HAL_Delay( 100 );
-
+        /*
         if ( send_check_reply( cell_ptr, "ATE0", ok_reply_c, fona_def_timeout_ms_c ) )
             {
             HAL_Delay( 100 );
+            Nucleo confirms operating with right Cell Module. (Not needed since we know it is right)
             flushInput( cell_ptr->uart_ptr );
             
             printf( "\t---> AT+GMR\n" );
@@ -116,8 +116,6 @@ bool begin( Cellular_module_t * const cell_ptr )
             transmit( cell_ptr,  "AT+GMR" , timeout );
 
             printf( "\t<--- %s\n", cell_ptr->reply_buffer );
-            
-            // Nucleo confirms operating with right Cell Module.
             if ( strstr( cell_ptr->reply_buffer, "SIM7000A" ) != NULL )
                 {
                 char buffer[ 32 ];
@@ -126,10 +124,13 @@ bool begin( Cellular_module_t * const cell_ptr )
                 return true;
                 } // end if
             else 
+                {
                 printf( "Couldn't find right revision!\n");
-            } // end if
+                } // end else
+            } // if 
         } // end if
-    	return false;
+        */
+        return send_check_reply( cell_ptr, "ATE0", ok_reply_c, fona_def_timeout_ms_c );
     } // end begin( )
 
 
@@ -304,15 +305,15 @@ bool sendSMS(Cellular_module_t * const cell_ptr, char const * const sms_message 
 	return false;
 	}
 
-	uint8_t buffer_pass[1024];
+	// uint8_t buffer_pass[1024];
 
 	//char *pass_buff = "eecs373";
     const char sub_ch = 0x1A;
-	sprintf( buffer_pass, "%s%c", sms_message, sub_ch );
+	// sprintf( buffer_pass, "%s%c", sms_message, sub_ch );
     printf( "--> AT SMS Message: %s\n\r", sms_message );
-    //HAL_UART_Transmit( cell_ptr->uart_ptr, ( uint8_t * ) sms_message, strlen( sms_message ), fona_def_timeout_ms_c );
-    //HAL_UART_Transmit( cell_ptr->uart_ptr, ( uint8_t * ) &sub_ch, 1, fona_def_timeout_ms_c );
-    HAL_UART_Transmit( cell_ptr->uart_ptr, ( uint8_t * ) buffer_pass, strlen( buffer_pass ), fona_def_timeout_ms_c );
+    HAL_UART_Transmit( cell_ptr->uart_ptr, ( uint8_t * ) sms_message, strlen( sms_message ), fona_def_timeout_ms_c );
+    HAL_UART_Transmit( cell_ptr->uart_ptr, ( uint8_t * ) &sub_ch, 1, fona_def_timeout_ms_c );
+    // HAL_UART_Transmit( cell_ptr->uart_ptr, ( uint8_t * ) buffer_pass, strlen( buffer_pass ), fona_def_timeout_ms_c );
 	//transmit( cell_ptr,  "hi" , fona_def_timeout_ms_c );
 	//transmit( cell_ptr,  &pass_buff , fona_def_timeout_ms_c );
 	readline(cell_ptr, 200, false);
@@ -398,7 +399,7 @@ uint8_t get_GPS(Cellular_module_t * const cell_ptr, uint8_t arg, char *buffer, u
 	}
 
 bool gGPS(Cellular_module_t * const cell_ptr ,float *lat, float *lon)
-        {
+    {
 
     flushInput( cell_ptr->uart_ptr );
 
@@ -420,16 +421,16 @@ bool gGPS(Cellular_module_t * const cell_ptr ,float *lat, float *lon)
         while( gps_ptr != gps_end && *gps_ptr != ',' ) { ++gps_ptr; } // Skipping until finds comma
         if ( commas_seen == 3 ) // Seen the <gps status, run status, time>
             {
-            *lat = ( gps_ptr != gps_start_ptr ) ? atof( gps_start_ptr ) : 0.0;
+            *lat = ( gps_ptr != gps_start_ptr ) ? atof( gps_start_ptr ) : 91.0; // Invalid point
             } // end if
         else if ( commas_seen == 4 ) // Seen the <gps status, run status, time, latitude>
             {
-            *lon = ( gps_ptr != gps_start_ptr ) ? atof( gps_start_ptr ) : 0.0;
+            *lon = ( gps_ptr != gps_start_ptr ) ? atof( gps_start_ptr ) : 91.0;
             } // end else if
         gps_start_ptr = gps_ptr;
         } // end for
 
-    return commas_seen == commas_to_see;
+    return commas_seen == commas_to_see && *lat != 91.0 && *lon != 91.0; 
     }
 
 

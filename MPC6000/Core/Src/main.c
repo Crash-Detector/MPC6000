@@ -37,8 +37,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 /* USER CODE END PD */
-float latitude = 0;
-float longitude = 0;
+
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
 #define MPU_SampleRate 80 /* in Hz */
@@ -97,7 +96,7 @@ static void MX_TIM4_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
-
+void Beep_reset( );
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -149,13 +148,13 @@ void writeMPU(uint8_t val, uint8_t reg_addr){
 
 #define MPU_OUTPUT_RATE         8000 // default output rate in Hz
 
-void SetupMPU(){
+int tryMPU(){
       uint8_t mpu_id;
       readMPU(&mpu_id, MPU_WHO_AM_I, 1);
       printf("Setting up MPU Device on I2C3...\n");
       if (mpu_id != 104) {
-          printf("[ERROR] MPU Device Setup Failed!!!\n");
-          exit(1);
+          printf("[ERROR] MPU I2C ID verification Failed!!!\n");
+          return 1;
       }
       // reset and wait up from sleep
       uint8_t mpu_pwr_1= 0b10000000;
@@ -180,7 +179,7 @@ void SetupMPU(){
       readMPU(&mpu_gyro_config, MPU_GYRO_CONFIG, 1);
       if (mpu_gyro_config != 0b11 << 3) {
           printf("[ERROR] MPU GyroMeter Setup Failed!!!");
-          exit(1);
+          return 1;
       }
 
       // Acc config
@@ -190,7 +189,7 @@ void SetupMPU(){
       readMPU(&mpu_acc_config, MPU_ACC_CONFIG, 1);
       if (mpu_acc_config != 0b11 << 3) {
           printf("[ERROR] MPU Acc Setup Failed!!!\n");
-          exit(1);
+          return 1;
       }
 
       // Generate interrupt at each data ready
@@ -201,10 +200,19 @@ void SetupMPU(){
       readMPU(&mpu_int_enable, MPU_INT_ENABLE, 1);
       if (mpu_int_enable != 1) {
           printf("[ERROR] MPU interrupt Setup Failed!!!\n");
-          exit(1);
+          return 1;
       }
 
       printf("...MPU Setup Success\n");
+      Beep_reset(); // Ok to enable interrupts now
+      return 0;
+}
+
+
+void SetupMPU(){
+    while(tryMPU()){
+        HAL_Delay(100);
+    }
 }
 
 void MPUSleep(){
@@ -352,7 +360,7 @@ int main(void)
   Cellular_module_t cell;
   SparkFun_Bio_Sensor_t sensor;
 
-  NVIC_DisableIRQ(EXTI4_IRQn);
+  // NVIC_DisableIRQ(EXTI4_IRQn);
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -380,7 +388,7 @@ int main(void)
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   printf("\r\n");
-  MPUSleep();
+  MPUSleep(); // Turn off interrupts if on
   printf( "Initializing!\n\r" );
   if ( !begin( &cell ) )
     {
@@ -412,8 +420,6 @@ int main(void)
 	  else{
 		printf( "GPS enable has worked\n\r" );
 	  }
-
-
 
   /*biometric sensor setup*/
       /*--------------begin------------------*/
@@ -465,12 +471,6 @@ int main(void)
     		  printf("Error setting mode: code %x\n\r", buf[0]);
     	  }
     	printf("Callibrated SpO2!\n");
-
-
-
-
-
-
 
     	  /*set our mode to MODE 1*/
     	    buf[0] = 0x10;
@@ -574,10 +574,6 @@ int main(void)
 
 
 
-
-
-
-
 	    HAL_Delay(1000);
 
   /*--------------end------------------*/
@@ -588,13 +584,15 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   fall_detected = 0;
-  Beep_reset(); // Ok to enable interrupts now
-  SetupMPU();
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
+  SetupMPU();
   TIM4->CCR2 = 0;
 
+  // Initialized at the beginning of the program.
+  float latitude = 0.0;
+  float longitude = 0.0;
 
-  NVIC_EnableIRQ(EXTI4_IRQn);
+  // NVIC_EnableIRQ(EXTI4_IRQn);
     while(1)
         {
         if (fall_detected)
@@ -612,7 +610,7 @@ int main(void)
             int blood_oxygen_count = 0;
             int status = 0;
 
-            for(int i = 0; i < 200; ++i){
+            for(int i = 0; i < 100; ++i){
             	buf[0] = 0x00;
             	buf[1] = 0x00;
             	ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 2, 5000);
@@ -623,36 +621,36 @@ int main(void)
 				buf[0] = 0x12;
 				buf[1] = 0x01;
             	ret = HAL_I2C_Master_Transmit(&hi2c1, Write_HM, &buf[0], 2, 5000);
-				      HAL_Delay(6);
-				      ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 10, 5000);
-				      printf("error code: %d ", buf[0]);
-				      int heartRate = ((buf[1]) << 8);
-				      printf("data: %d %d %d %d\n", buf[1], buf[2], buf[3], buf[6]);
-				      heartRate |= (buf[2]);
-				      heartRate = heartRate/10;
-				      heart_rate += heartRate;
-				      if(heartRate != 0){
-				    	  heart_rate_count += 1;
-				      }
+				  HAL_Delay(6);
+				  ret = HAL_I2C_Master_Receive(&hi2c1, Read_HM, &buf[0], 10, 5000);
+				  printf("error code: %d ", buf[0]);
+				  int heartRate = ((buf[1]) << 8);
+				  printf("data: %d %d %d %d\n", buf[1], buf[2], buf[3], buf[6]);
+				  heartRate |= (buf[2]);
+				  heartRate = heartRate/10;
+				  heart_rate += heartRate;
+				  if(heartRate != 0){
+					  heart_rate_count += 1;
+				  }
 
-				      // Confidence formatting
-				      int confidence = buf[3];
+				  // Confidence formatting
+				  int confidence = buf[3];
 
-				      //Blood oxygen level formatting
-				      int oxygen = (buf[4]) << 8;
-				      oxygen += buf[5];
-				      blood_oxygen += oxygen/10.0;
+				  //Blood oxygen level formatting
+				  int oxygen = (buf[4]) << 8;
+				  oxygen += buf[5];
+				  blood_oxygen += oxygen/10.0;
 
-				      if(blood_oxygen != 0){
-				    	  blood_oxygen_count += 1;
-				      	}
+				  if(blood_oxygen != 0){
+					  blood_oxygen_count += 1;
+					}
 
-				      //"Machine State" - has a finger been detected?
+				  //"Machine State" - has a finger been detected?
 
-				      status = buf[6];
-				      printf( "heartrate: %d, status: %d, blood_oxygen %d, confidence: %d\n\r", heartRate, status, oxygen, confidence );
+				  status = buf[6];
+				  printf( "heartrate: %d, status: %d, blood_oxygen %d, confidence: %d\n\r", heartRate, status, oxygen, confidence );
 
-				      HAL_Delay(100);
+				  HAL_Delay(100);
             } // end for
             if (heart_rate_count!=0){
             heart_rate = heart_rate/heart_rate_count;
@@ -664,44 +662,35 @@ int main(void)
             //get GPS
 
 
-            for(int i = 0; i<20; i++){
+          for(int i = 0; i<10; i++)
+              {
             	float lat = 0;
             	float lon= 0;
-            	if ( !gGPS( &cell, &lat, &lon ) ){
-					printf( "GPS read has failed \n\t");
-					//return 1;
-				  }
-            	else{
-					if (lat !=0 || lon !=0){
-						latitude = lat;
-						longitude = lon;
+            	if ( !gGPS( &cell, &lat, &lon ) )
+                  {
+					        printf( "GPS read has failed \n\t");
+				          } // end if
+              else
+                  {
+                	latitude = lat;
+				          longitude = lon;
+				          break;
+			            } // end else
+			        } // for
+          printf("status: %d", status);
+          if(status != 3){
+              sprintf(message_buffer, "SOS! Injured at %f latitude %f longitude. Finger is off the sensor! measured: heart rate: %d blood oxygen: %d", latitude, longitude, heart_rate, (int)blood_oxygen);
+          }
+          else {
+              sprintf(message_buffer, "SOS! Injured at %f latitude %f longitude. Heart rate: %d blood oxygen: %d", latitude, longitude, heart_rate, (int)blood_oxygen);
+          }
 
-					break;
-					}
-				  }
-
-			  }
-
-
-            printf("status: %d", status);
-
-
-
-            if(status != 3){
-            	sprintf(message_buffer, "SOS! Injured at %f latitude %f longitude. Finger is off the sensor! measured: heart rate: %d blood oxygen: %d", latitude, longitude, heart_rate, (int)blood_oxygen);
-            }
-            else{
-            	sprintf(message_buffer, "SOS! Injured at %f latitude %f longitude. Heart rate: %d blood oxygen: %d", latitude, longitude, heart_rate, (int)blood_oxygen);
-            }
-
-
-            // send out message
-            printf( "Here's the sos message: %s\n\r", message_buffer );
-            HAL_Delay( 1000 );
-            sendSMS( &cell, message_buffer );
-            fall_detected = 0;
-            SetupMPU(); /* reset MPU */
-            Beep_reset();
+          // send out message
+          printf( "Here's the sos message: %s\n\r", message_buffer );
+          HAL_Delay( 1000 );
+          sendSMS( &cell, message_buffer );
+          fall_detected = 0;
+          SetupMPU(); /* reset MPU */
             } // end if
         } // end while
     /* USER CODE END WHILE */
@@ -986,7 +975,7 @@ static void MX_TIM4_Init(void)
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
   sConfigOC.Pulse = 1000;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_LOW;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
   {
